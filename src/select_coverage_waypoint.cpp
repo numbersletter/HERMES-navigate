@@ -88,6 +88,10 @@ void SelectCoverageWaypoint::computeWaypoints(const nav_msgs::msg::OccupancyGrid
 
   const int standoff_cells = static_cast<int>(standoff_distance_m_ / res);
 
+  // Occupancy thresholds
+  constexpr int OCCUPIED_THRESHOLD = 50;  // cells ≥ this are considered walls
+  constexpr int FREE_THRESHOLD     = 20;  // cells ≤ this are considered free
+
   // 8-connectivity directions for normal estimation
   const int dnx[] = {-1,  0,  1, -1, 1, -1,  0,  1};
   const int dny[] = {-1, -1, -1,  0, 0,  1,  1,  1};
@@ -103,7 +107,7 @@ void SelectCoverageWaypoint::computeWaypoints(const nav_msgs::msg::OccupancyGrid
 
   for (int y = 0; y < height; y += sample_stride) {
     for (int x = 0; x < width; x += sample_stride) {
-      if (map.data[static_cast<std::size_t>(idx(x, y))] < 50) {
+      if (map.data[static_cast<std::size_t>(idx(x, y))] < OCCUPIED_THRESHOLD) {
         continue;  // not occupied
       }
 
@@ -113,7 +117,7 @@ void SelectCoverageWaypoint::computeWaypoints(const nav_msgs::msg::OccupancyGrid
         int nx = x + dnx[d];
         int ny = y + dny[d];
         if (inBounds(nx, ny) &&
-          map.data[static_cast<std::size_t>(idx(nx, ny))] < 50)
+          map.data[static_cast<std::size_t>(idx(nx, ny))] < OCCUPIED_THRESHOLD)
         {
           norm_x += static_cast<double>(dnx[d]);
           norm_y += static_cast<double>(dny[d]);
@@ -134,7 +138,7 @@ void SelectCoverageWaypoint::computeWaypoints(const nav_msgs::msg::OccupancyGrid
       if (!inBounds(vx, vy)) {
         continue;
       }
-      if (map.data[static_cast<std::size_t>(idx(vx, vy))] > 20) {
+      if (map.data[static_cast<std::size_t>(idx(vx, vy))] > FREE_THRESHOLD) {
         continue;  // viewing pose is inside an obstacle
       }
 

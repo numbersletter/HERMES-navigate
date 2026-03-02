@@ -25,9 +25,10 @@ ShouldDoCoverage::ShouldDoCoverage(
   const BT::NodeConfig & config)
 : BT::ConditionNode(name, config)
 {
-  // Default: 20 % of iterations are coverage tasks → period = 5
-  double ratio = 0.2;
-  coverage_period_ = std::max(1, static_cast<int>(std::round(1.0 / ratio)));
+  // coverage_period_ is derived from coverage_task_ratio in tick() so that
+  // blackboard / XML changes take effect dynamically.  The value set here is
+  // only used if the port is not connected (unlikely in production but safe).
+  coverage_period_ = 5;  // corresponds to the default ratio of 0.2
 }
 
 BT::PortsList ShouldDoCoverage::providedPorts()

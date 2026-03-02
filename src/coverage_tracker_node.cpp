@@ -196,11 +196,8 @@ void CoverageTrackerNode::markFrustum(double robot_x, double robot_y, double yaw
       // Angle from robot heading to this cell
       double angle_to_cell = std::atan2(
         static_cast<double>(dy), static_cast<double>(dx));
-      double angle_diff    = angle_to_cell - yaw;
-
-      // Normalise to [-pi, pi]
-      while (angle_diff >  M_PI) {angle_diff -= 2.0 * M_PI;}
-      while (angle_diff < -M_PI) {angle_diff += 2.0 * M_PI;}
+      // Normalise to [-pi, pi] using std::remainder (single-pass, no loop)
+      double angle_diff = std::remainder(angle_to_cell - yaw, 2.0 * M_PI);
 
       if (std::abs(angle_diff) <= half_fov) {
         coverage_data_[static_cast<std::size_t>(ny * width + nx)] = 100;
