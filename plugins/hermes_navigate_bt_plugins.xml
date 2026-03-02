@@ -1,0 +1,44 @@
+<library path="hermes_navigate_bt_plugins">
+
+  <class type="hermes_navigate::ComputeFrontiers"
+         base_class_type="BT::TreeNode">
+    <description>
+      BFS-based frontier detection on the Nav2 global costmap.
+      Outputs a list of clustered frontier candidates on the blackboard.
+    </description>
+  </class>
+
+  <class type="hermes_navigate::ScoreFrontiers"
+         base_class_type="BT::TreeNode">
+    <description>
+      Scores each frontier using: score = alpha * info_gain - beta * traversal_cost.
+      Uses A* on the costmap for traversal cost and unknown-cell counting for
+      information gain.
+    </description>
+  </class>
+
+  <class type="hermes_navigate::SelectNextFrontier"
+         base_class_type="BT::TreeNode">
+    <description>
+      Orders scored frontiers with a greedy nearest-neighbour heuristic and
+      applies hysteresis before emitting the next NavigateToPose goal.
+    </description>
+  </class>
+
+  <class type="hermes_navigate::ShouldDoCoverage"
+         base_class_type="BT::TreeNode">
+    <description>
+      Condition node that returns SUCCESS every N iterations
+      (N derived from coverage_task_ratio) to trigger a camera-coverage step.
+    </description>
+  </class>
+
+  <class type="hermes_navigate::SelectCoverageWaypoint"
+         base_class_type="BT::TreeNode">
+    <description>
+      Picks the next wall-facing camera-coverage waypoint from the occupancy
+      grid and outputs it as a NavigateToPose goal.
+    </description>
+  </class>
+
+</library>
