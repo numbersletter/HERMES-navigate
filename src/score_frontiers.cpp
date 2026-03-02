@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "hermes_navigate/score_frontiers.hpp"
+#include "hermes_navigate/costmap_constants.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -154,7 +155,7 @@ int ScoreFrontiers::countUnknownCells(
   const nav2_msgs::msg::Costmap & costmap,
   int cx, int cy, int radius_cells)
 {
-  constexpr uint8_t UNKNOWN = 255;
+  constexpr uint8_t UNKNOWN = costmap::UNKNOWN;
   const int width  = static_cast<int>(costmap.metadata.size_x);
   const int height = static_cast<int>(costmap.metadata.size_y);
   const auto & data = costmap.data;
@@ -190,8 +191,8 @@ double ScoreFrontiers::aStarCost(
   const double res = costmap.metadata.resolution;
   const auto & data = costmap.data;
 
-  constexpr uint8_t LETHAL  = 253;
-  constexpr uint8_t UNKNOWN = 255;
+  constexpr uint8_t LETHAL  = costmap::LETHAL;
+  constexpr uint8_t UNKNOWN = costmap::UNKNOWN;
 
   if (start_x == goal_x && start_y == goal_y) {
     return 0.0;

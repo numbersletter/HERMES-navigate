@@ -76,7 +76,13 @@
         <!-- ─── Branch A: Exploration not yet complete ─────────────────── -->
         <Fallback>
 
-          <!-- If exploration_done is true, skip exploration entirely -->
+          <!--
+            Skip this sub-tree when exploration_done == true.
+            BlackboardCheckBool succeeds when value_A == value_B, so checking
+            exploration_done == true would succeed when exploration is DONE.
+            We wrap it in Inverter so the outer Fallback falls through to the
+            exploration/coverage selector only while exploration is NOT yet done.
+          -->
           <Inverter>
             <BlackboardCheckBool value_A="{exploration_done}"
                                  value_B="true"

@@ -59,7 +59,6 @@ bt_navigator:
       - nav2_assisted_teleop_cancel_bt_node
       - nav2_drive_on_heading_cancel_bt_node
       - nav2_is_battery_low_condition_bt_node
-      - nav2_navigate_to_pose_action_bt_node
       - hermes_navigate_bt_plugins   # HERMES custom BT nodes
 
 # ── Planner Server (NavFn) ────────────────────────────────────────────────────

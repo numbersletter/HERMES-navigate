@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "hermes_navigate/compute_frontiers.hpp"
+#include "hermes_navigate/costmap_constants.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -102,12 +103,11 @@ std::vector<std::pair<int, int>> ComputeFrontiers::detectFrontierCells(
   const int height = static_cast<int>(costmap.metadata.size_y);
   const auto & data = costmap.data;
 
-  // Cost value meanings for Nav2 costmap:
+  // Cost value meanings for Nav2 costmap (see costmap_constants.hpp):
   //   0         = free
   //   255       = unknown (nav2_costmap_2d::NO_INFORMATION)
   //   1–252     = inflated / lethal
-  constexpr uint8_t FREE    = 0;
-  constexpr uint8_t UNKNOWN = 255;
+  using namespace costmap;  // NOLINT(build/namespaces)
 
   auto idx = [&](int x, int y) { return y * width + x; };
   auto inBounds = [&](int x, int y) {
