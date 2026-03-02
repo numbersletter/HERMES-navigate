@@ -1,0 +1,117 @@
+<?xml version="1.0"?>
+<!--
+  HERMES Explore-and-Cover Behavior Tree
+  =======================================
+  Top-level BT that orchestrates:
+    1. Check if exploration is complete.
+    2. If not: decide exploration vs. coverage (coverage_task_ratio).
+       a. Exploration branch: ComputeFrontiers → ScoreFrontiers
+                              → SelectNextFrontier → NavigateToPose
+       b. Coverage branch:   SelectCoverageWaypoint → NavigateToPose
+    3. If exploration is complete: pure coverage mode.
+    4. Both done: halt with a log message.
+
+  Configurable blackboard entries (set before tree starts or via parameters):
+    coverage_task_ratio  (double, default 0.2)
+-->
+<root BTCPP_format="4" main_tree_to_execute="ExploreAndCover">
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- Sub-tree: Exploration Step                                             -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <BehaviorTree ID="ExplorationStep">
+    <Sequence>
+      <!-- 1. Detect frontier clusters from global costmap -->
+      <ComputeFrontiers frontiers="{frontiers}"/>
+
+      <!-- 2. Score each frontier (info gain + A* cost) -->
+      <ScoreFrontiers
+        frontiers="{frontiers}"
+        robot_pose="{robot_pose}"
+        scored_frontiers="{scored_frontiers}"/>
+
+      <!-- 3. Select best frontier as goal (with hysteresis) -->
+      <SelectNextFrontier
+        scored_frontiers="{scored_frontiers}"
+        robot_pose="{robot_pose}"
+        goal="{nav_goal}"
+        exploration_done="{exploration_done}"/>
+
+      <!-- 4. Navigate there -->
+      <NavigateToPose goal="{nav_goal}"
+                      server_name="navigate_to_pose"
+                      server_timeout="120.0"
+                      behavior_tree=""/>
+    </Sequence>
+  </BehaviorTree>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- Sub-tree: Coverage Step                                               -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <BehaviorTree ID="CoverageStep">
+    <Sequence>
+      <!-- Pick the next unvisited wall-facing waypoint -->
+      <SelectCoverageWaypoint goal="{nav_goal}"/>
+
+      <!-- Navigate to the coverage waypoint -->
+      <NavigateToPose goal="{nav_goal}"
+                      server_name="navigate_to_pose"
+                      server_timeout="120.0"
+                      behavior_tree=""/>
+    </Sequence>
+  </BehaviorTree>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- Main Tree                                                             -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <BehaviorTree ID="ExploreAndCover">
+    <!--
+      Outer RepeatUntilSuccess keeps looping until the mission is finished.
+      We use a ReactiveSequence at the top level so conditions are re-checked
+      on every tick.
+    -->
+    <Repeat num_cycles="-1">  <!-- -1 = infinite -->
+      <ReactiveSequence>
+
+        <!-- ─── Branch A: Exploration not yet complete ─────────────────── -->
+        <Fallback>
+
+          <!-- If exploration_done is true, skip exploration entirely -->
+          <Inverter>
+            <BlackboardCheckBool value_A="{exploration_done}"
+                                 value_B="true"
+                                 return_on_mismatch="SUCCESS"/>
+          </Inverter>
+
+          <!-- Exploration is not done: decide exploration vs coverage -->
+          <Fallback>
+
+            <!-- Coverage branch: fires every N-th iteration -->
+            <Sequence>
+              <ShouldDoCoverage
+                coverage_task_ratio="{coverage_task_ratio}"/>
+              <SubTree ID="CoverageStep"/>
+            </Sequence>
+
+            <!-- Exploration branch (default) -->
+            <SubTree ID="ExplorationStep"/>
+
+          </Fallback>
+        </Fallback>
+
+        <!-- ─── Branch B: Exploration complete → pure coverage ──────────── -->
+        <Sequence>
+          <BlackboardCheckBool value_A="{exploration_done}"
+                               value_B="true"
+                               return_on_mismatch="FAILURE"/>
+          <!-- Keep running coverage until SelectCoverageWaypoint returns FAILURE -->
+          <Repeat num_cycles="-1">
+            <SubTree ID="CoverageStep"/>
+          </Repeat>
+        </Sequence>
+
+      </ReactiveSequence>
+    </Repeat>
+  </BehaviorTree>
+
+</root>
