@@ -48,6 +48,7 @@ Usage
 
 import os
 
+import xacro
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import (
@@ -73,6 +74,8 @@ def generate_launch_description():
                                    "hermes_world.sdf")
     sdf_file        = os.path.join(pkg_hermes_navigate, "urdf",
                                    "hermes_sim.sdf")
+    urdf_xacro_file = os.path.join(pkg_hermes_navigate, "urdf",
+                                   "hermes_sim.urdf.xacro")
     bridge_params   = os.path.join(pkg_hermes_navigate, "config",
                                    "ros_gz_bridge.yaml")
     slam_params     = os.path.join(pkg_hermes_navigate, "config",
@@ -98,11 +101,11 @@ def generate_launch_description():
     world     = LaunchConfiguration("world")
     gz_gui    = LaunchConfiguration("gz_gui")
 
-    # ── Robot description (read SDF file) ────────────────────────────────────
-    #   Used by robot_state_publisher (parsed via sdformat_urdf plugin) to
-    #   publish the static /tf transforms for all fixed joints.
-    with open(sdf_file, "r") as f:
-        robot_description_content = f.read()
+    # ── Robot description (process URDF xacro) ───────────────────────────────
+    #   robot_state_publisher uses the URDF (not the SDF) so that sdformat_urdf
+    #   is not involved and no sensor-related warnings are emitted.
+    #   The URDF xacro dimensions match hermes_sim.sdf exactly.
+    robot_description_content = xacro.process_file(urdf_xacro_file).toxml()
 
     # ── 1. Gazebo Harmonic ────────────────────────────────────────────────────
     #   gz_args:

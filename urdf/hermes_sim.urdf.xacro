@@ -5,16 +5,23 @@
   Simulation URDF for the HERMES differential-drive robot.
   Designed for Gazebo Harmonic (gz-sim) with ROS 2 Jazzy.
 
+  Robot geometry (matches hermes_sim.sdf exactly)
+  ------------------------------------------------
+    Body:         cube  5.5 × 5.5 × 5.5 in  (0.1397 × 0.1397 × 0.1397 m)
+    Drive wheels: diameter 2.6 in (r = 0.0330 m), width 0.7 in (0.0178 m)
+    Caster:       sphere, radius = wheel_radius/2 = 0.0165 m, placed at FRONT
+    body_z_spawn  = wheel_radius + body_size/2 = 0.0330 + 0.0699 = 0.1029 m
+
   TF tree produced at runtime
   ---------------------------
     odom  ←─ (DiffDrive plugin via /tf bridge)
-      └── base_footprint
-            └── base_link
+      └── base_footprint   (ground level)
+            └── base_link  (body centre, 0.1029 m AGL)
                   ├── wheel_left_link
                   ├── wheel_right_link
                   ├── caster_link
-                  ├── laser_frame   (LiDAR at z=0.18 m)
-                  └── camera_frame  (camera at x=0.05, z=0.20 m)
+                  ├── laser_frame   (LiDAR at z=+0.0699 m from base_link)
+                  └── camera_frame  (camera at x=0.0699, z=+0.0699 m)
 
   Topics
   ------
@@ -26,28 +33,32 @@
 -->
 <robot name="hermes" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <!-- ── Constants ───────────────────────────────────────────────────────── -->
+  <!-- ── Constants (mirror hermes_sim.sdf) ───────────────────────────────── -->
   <xacro:property name="PI"               value="3.14159265359"/>
-  <xacro:property name="base_radius"      value="0.18"/>   <!-- m  -->
-  <xacro:property name="base_height"      value="0.15"/>   <!-- m  -->
-  <xacro:property name="wheel_radius"     value="0.05"/>   <!-- m  -->
-  <xacro:property name="wheel_width"      value="0.04"/>   <!-- m  -->
-  <xacro:property name="wheel_separation" value="0.30"/>   <!-- m  -->
+  <xacro:property name="body_size"        value="0.1397"/>  <!-- cube side, m -->
+  <xacro:property name="wheel_radius"     value="0.0330"/>  <!-- m -->
+  <xacro:property name="wheel_width"      value="0.0178"/>  <!-- m -->
+  <xacro:property name="wheel_y"          value="0.0788"/>  <!-- body_size/2 + wheel_width/2 -->
+  <xacro:property name="wheel_separation" value="0.1575"/>  <!-- 2 × wheel_y, m -->
+  <xacro:property name="caster_radius"    value="0.0165"/>  <!-- wheel_radius/2, m -->
+  <!-- body_z_spawn: height of base_link centre above ground -->
+  <xacro:property name="body_z_spawn"     value="0.1029"/>  <!-- wheel_radius + body_size/2 -->
 
-  <!-- ── base_footprint ─────────────────────────────────────────────────── -->
+  <!-- ── base_footprint (virtual, ground-level) ─────────────────────────── -->
   <link name="base_footprint"/>
 
   <joint name="base_footprint_joint" type="fixed">
     <parent link="base_footprint"/>
     <child  link="base_link"/>
-    <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
+    <!-- base_link centre is body_z_spawn above the ground footprint -->
+    <origin xyz="0 0 ${body_z_spawn}" rpy="0 0 0"/>
   </joint>
 
-  <!-- ── base_link (cylindrical body) ──────────────────────────────────── -->
+  <!-- ── base_link (cube body) ──────────────────────────────────────────── -->
   <link name="base_link">
     <visual>
       <geometry>
-        <cylinder radius="${base_radius}" length="${base_height}"/>
+        <box size="${body_size} ${body_size} ${body_size}"/>
       </geometry>
       <material name="dark_grey">
         <color rgba="0.3 0.3 0.3 1.0"/>
@@ -55,15 +66,15 @@
     </visual>
     <collision>
       <geometry>
-        <cylinder radius="${base_radius}" length="${base_height}"/>
+        <box size="${body_size} ${body_size} ${body_size}"/>
       </geometry>
     </collision>
     <inertial>
       <mass value="5.0"/>
-      <!-- Solid cylinder: Ixx=Iyy=m(3r²+h²)/12, Izz=mr²/2 -->
-      <inertia ixx="0.0607" ixy="0.0" ixz="0.0"
-               iyy="0.0607" iyz="0.0"
-               izz="0.0810"/>
+      <!-- Solid cube: I = m·s²/6 = 5.0·0.1397²/6 ≈ 0.01627 each axis -->
+      <inertia ixx="0.01627" ixy="0.0" ixz="0.0"
+               iyy="0.01627" iyz="0.0"
+               izz="0.01627"/>
     </inertial>
   </link>
 
@@ -86,16 +97,18 @@
     </collision>
     <inertial>
       <mass value="0.5"/>
-      <inertia ixx="0.00052" ixy="0.0" ixz="0.0"
-               iyy="0.00052" iyz="0.0"
-               izz="0.00063"/>
+      <!-- Solid cylinder: Ixx=Iyy=m(3r²+h²)/12, Izz=mr²/2 -->
+      <inertia ixx="0.000149" ixy="0.0" ixz="0.0"
+               iyy="0.000149" iyz="0.0"
+               izz="0.000272"/>
     </inertial>
   </link>
 
+  <!-- wheel axis at the bottom face of the body: z = -body_size/2 = -0.0699 -->
   <joint name="wheel_left_joint" type="continuous">
     <parent link="base_link"/>
     <child  link="wheel_left_link"/>
-    <origin xyz="0 ${wheel_separation/2} 0" rpy="0 0 0"/>
+    <origin xyz="0 ${wheel_y} ${-body_size/2}" rpy="0 0 0"/>
     <axis xyz="0 1 0"/>
   </joint>
 
@@ -118,24 +131,26 @@
     </collision>
     <inertial>
       <mass value="0.5"/>
-      <inertia ixx="0.00052" ixy="0.0" ixz="0.0"
-               iyy="0.00052" iyz="0.0"
-               izz="0.00063"/>
+      <inertia ixx="0.000149" ixy="0.0" ixz="0.0"
+               iyy="0.000149" iyz="0.0"
+               izz="0.000272"/>
     </inertial>
   </link>
 
   <joint name="wheel_right_joint" type="continuous">
     <parent link="base_link"/>
     <child  link="wheel_right_link"/>
-    <origin xyz="0 ${-wheel_separation/2} 0" rpy="0 0 0"/>
+    <origin xyz="0 ${-wheel_y} ${-body_size/2}" rpy="0 0 0"/>
     <axis xyz="0 1 0"/>
   </joint>
 
   <!-- ── Caster wheel (passive ball, zero friction) ─────────────────────── -->
+  <!--   x = body_size/2 - caster_radius = 0.0699 - 0.0165 = 0.0534 m       -->
+  <!--   z = caster_radius - body_z_spawn = 0.0165 - 0.1029 = -0.0864 m     -->
   <link name="caster_link">
     <visual>
       <geometry>
-        <sphere radius="${wheel_radius/2}"/>
+        <sphere radius="${caster_radius}"/>
       </geometry>
       <material name="light_grey">
         <color rgba="0.6 0.6 0.6 1.0"/>
@@ -143,7 +158,7 @@
     </visual>
     <collision>
       <geometry>
-        <sphere radius="${wheel_radius/2}"/>
+        <sphere radius="${caster_radius}"/>
       </geometry>
     </collision>
     <inertial>
@@ -157,12 +172,12 @@
   <joint name="caster_joint" type="fixed">
     <parent link="base_link"/>
     <child  link="caster_link"/>
-    <!-- Rear of base, resting on the ground -->
-    <origin xyz="${-(base_radius - wheel_radius/2)} 0 ${-(base_height/2 - wheel_radius/2)}"
-            rpy="0 0 0"/>
+    <!-- Front of base, sphere centre at ground level -->
+    <origin xyz="0.0534 0 -0.0864" rpy="0 0 0"/>
   </joint>
 
-  <!-- ── laser_frame (2-D LiDAR) ───────────────────────────────────────── -->
+  <!-- ── laser_frame (2-D LiDAR, on top of body) ───────────────────────── -->
+  <!--   z = +body_size/2 = +0.0699 m relative to base_link centre          -->
   <link name="laser_frame">
     <visual>
       <geometry>
@@ -188,10 +203,12 @@
   <joint name="laser_joint" type="fixed">
     <parent link="base_link"/>
     <child  link="laser_frame"/>
-    <origin xyz="0 0 0.18" rpy="0 0 0"/>
+    <origin xyz="0 0 ${body_size/2}" rpy="0 0 0"/>
   </joint>
 
-  <!-- ── camera_frame ──────────────────────────────────────────────────── -->
+  <!-- ── camera_frame (front-top corner of body) ───────────────────────── -->
+  <!--   x = body_size/2 = 0.0699 m (front face)                            -->
+  <!--   z = body_size/2 = 0.0699 m (top face)                              -->
   <link name="camera_frame">
     <visual>
       <geometry>
@@ -212,11 +229,13 @@
   <joint name="camera_joint" type="fixed">
     <parent link="base_link"/>
     <child  link="camera_frame"/>
-    <origin xyz="0.05 0 0.20" rpy="0 0 0"/>
+    <origin xyz="${body_size/2} 0 ${body_size/2}" rpy="0 0 0"/>
   </joint>
 
   <!-- ══════════════════════════════════════════════════════════════════════
        Gazebo Harmonic (gz-sim) plugins
+       (active only when this xacro is loaded directly by Gazebo; in the
+        simulation launch the SDF is used for spawning instead)
        ══════════════════════════════════════════════════════════════════════ -->
 
   <!-- Differential drive controller ──────────────────────────────────────── -->
