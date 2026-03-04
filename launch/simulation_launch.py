@@ -22,9 +22,9 @@ the HERMES autonomous exploration and navigation stack.
 What is started
 ---------------
   1. Gazebo Harmonic (gz-sim) with a simple indoor test world
-  2. robot_state_publisher  — publishes /tf from the URDF
-  3. ros_gz_bridge          — bridges ROS 2 ↔ Gazebo topics
-  4. Gazebo entity spawner  — spawns the HERMES robot in Gazebo
+  2. robot_state_publisher  — publishes /tf from the robot SDF description
+  3. ros_gz_bridge          — bridges ROS 2 ↔ Gazebo topics (YAML config)
+  4. Gazebo entity spawner  — spawns the HERMES robot in Gazebo from SDF
   5. slam_toolbox           — online async SLAM (map → odom TF + /map)
   6. Nav2 full stack        — planner / controller / BT navigator
   7. coverage_tracker_node  — lifecycle camera-coverage tracker
@@ -57,8 +57,6 @@ from launch.actions import (
 )
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import (
-    Command,
-    FindExecutable,
     LaunchConfiguration,
     PythonExpression,
 )
@@ -73,8 +71,10 @@ def generate_launch_description():
     # ── Paths to key files ────────────────────────────────────────────────────
     default_world   = os.path.join(pkg_hermes_navigate, "worlds",
                                    "hermes_world.sdf")
-    urdf_file       = os.path.join(pkg_hermes_navigate, "urdf",
-                                   "hermes_sim.urdf.xacro")
+    sdf_file        = os.path.join(pkg_hermes_navigate, "urdf",
+                                   "hermes_sim.sdf")
+    bridge_params   = os.path.join(pkg_hermes_navigate, "config",
+                                   "ros_gz_bridge.yaml")
     slam_params     = os.path.join(pkg_hermes_navigate, "config",
                                    "slam_toolbox_params.yaml")
     nav2_params     = os.path.join(pkg_hermes_navigate, "config",
@@ -98,10 +98,11 @@ def generate_launch_description():
     world     = LaunchConfiguration("world")
     gz_gui    = LaunchConfiguration("gz_gui")
 
-    # ── Robot description (xacro → URDF string) ───────────────────────────────
-    robot_description_content = Command(
-        [FindExecutable(name="xacro"), " ", urdf_file]
-    )
+    # ── Robot description (read SDF file) ────────────────────────────────────
+    #   Used by robot_state_publisher (parsed via sdformat_urdf plugin) to
+    #   publish the static /tf transforms for all fixed joints.
+    with open(sdf_file, "r") as f:
+        robot_description_content = f.read()
 
     # ── 1. Gazebo Harmonic ────────────────────────────────────────────────────
     #   gz_args:
@@ -137,42 +138,31 @@ def generate_launch_description():
 
     # ── 3. ros_gz_bridge ─────────────────────────────────────────────────────
     #   Bridges Gazebo ↔ ROS 2 topics needed by the HERMES stack.
-    #   Format:  /topic@ros_type[gz_type   means gz→ros (subscribe gz)
-    #            /topic@ros_type]gz_type   means ros→gz (publish to gz)
-    #            /topic@ros_type@gz_type   means bidirectional
+    #   Topic mapping is configured via config/ros_gz_bridge.yaml.
     bridge = Node(
         package="ros_gz_bridge",
         executable="parameter_bridge",
         name="gz_bridge",
-        arguments=[
-            # Simulation clock → ROS 2 /clock
-            "/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock",
-            # Drive command: ROS 2 → Gazebo
-            "/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist",
-            # Wheel odometry: Gazebo → ROS 2
-            "/odom@nav_msgs/msg/Odometry[gz.msgs.Odometry",
-            # 2-D laser scan: Gazebo → ROS 2
-            "/scan@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan",
-            # TF (odom → base_footprint from DiffDrive): Gazebo → ROS 2
-            "/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V",
-            # Wheel joint states: Gazebo → ROS 2
-            "/joint_states@sensor_msgs/msg/JointState[gz.msgs.Model",
+        parameters=[
+            {"config_file": bridge_params},
+            {"use_sim_time": True},
         ],
         output="screen",
-        parameters=[{"use_sim_time": True}],
     )
 
     # ── 4. Spawn HERMES robot into Gazebo ─────────────────────────────────────
+    #   Spawn from the SDF file directly.
+    #   body_z_spawn = wheel_radius + body_size/2 = 0.033 + 0.0699 = 0.1029 m
     spawn_robot = Node(
         package="ros_gz_sim",
         executable="create",
         name="spawn_hermes",
         arguments=[
             "-name",  "hermes",
-            "-topic", "robot_description",   # reads from /robot_description
+            "-file",  sdf_file,
             "-x",     "0.0",
             "-y",     "0.0",
-            "-z",     "0.05",
+            "-z",     "0.1029",
             "-Y",     "0.0",
         ],
         output="screen",
