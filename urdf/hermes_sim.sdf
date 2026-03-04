@@ -325,7 +325,7 @@
       <odom_topic>odom</odom_topic>
       <tf_topic>tf</tf_topic>
       <frame_id>odom</frame_id>
-      <child_frame_id>base_link</child_frame_id>
+      <child_frame_id>base_footprint</child_frame_id>
       <min_velocity>-0.5</min_velocity>
       <max_velocity>0.5</max_velocity>
       <min_acceleration>-1.0</min_acceleration>
