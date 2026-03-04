@@ -48,6 +48,7 @@ Usage
 
 import os
 
+import xacro
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import (
@@ -71,8 +72,8 @@ def generate_launch_description():
     # ── Paths to key files ────────────────────────────────────────────────────
     default_world   = os.path.join(pkg_hermes_navigate, "worlds",
                                    "hermes_world.sdf")
-    sdf_file        = os.path.join(pkg_hermes_navigate, "urdf",
-                                   "hermes_sim.sdf")
+    sdf_xacro_file  = os.path.join(pkg_hermes_navigate, "urdf",
+                                   "hermes_sim.sdf.xacro")
     bridge_params   = os.path.join(pkg_hermes_navigate, "config",
                                    "ros_gz_bridge.yaml")
     slam_params     = os.path.join(pkg_hermes_navigate, "config",
@@ -98,11 +99,10 @@ def generate_launch_description():
     world     = LaunchConfiguration("world")
     gz_gui    = LaunchConfiguration("gz_gui")
 
-    # ── Robot description (read SDF file) ────────────────────────────────────
-    #   Used by robot_state_publisher (parsed via sdformat_urdf plugin) to
-    #   publish the static /tf transforms for all fixed joints.
-    with open(sdf_file, "r") as f:
-        robot_description_content = f.read()
+    # ── Robot description (process SDF xacro) ────────────────────────────────
+    #   xacro expands the wheel macro then hands clean SDF to both RSP and the
+    #   Gazebo spawner.  robot_state_publisher accepts SDF via sdformat_urdf.
+    robot_description_content = xacro.process_file(sdf_xacro_file).toxml()
 
     # ── 1. Gazebo Harmonic ────────────────────────────────────────────────────
     #   gz_args:
@@ -151,19 +151,20 @@ def generate_launch_description():
     )
 
     # ── 4. Spawn HERMES robot into Gazebo ─────────────────────────────────────
-    #   Spawn from the SDF file directly.
+    #   Pass the already-processed SDF string directly via -string so no
+    #   separate plain-SDF file needs to exist on disk.
     #   body_z_spawn = wheel_radius + body_size/2 = 0.033 + 0.0699 = 0.1029 m
     spawn_robot = Node(
         package="ros_gz_sim",
         executable="create",
         name="spawn_hermes",
         arguments=[
-            "-name",  "hermes",
-            "-file",  sdf_file,
-            "-x",     "0.0",
-            "-y",     "0.0",
-            "-z",     "0.1029",
-            "-Y",     "0.0",
+            "-name",   "hermes",
+            "-string", robot_description_content,
+            "-x",      "0.0",
+            "-y",      "0.0",
+            "-z",      "0.1029",
+            "-Y",      "0.0",
         ],
         output="screen",
         parameters=[{"use_sim_time": True}],
