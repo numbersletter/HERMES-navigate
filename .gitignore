@@ -1,0 +1,2 @@
+# CodeQL source root symlink (causes CMake cyclic globbing warnings)
+_codeql_detected_source_root
