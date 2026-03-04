@@ -32,20 +32,20 @@
   TF tree produced at runtime
   ===========================
     odom  <- (DiffDrive plugin via /tf bridge)
-      base_link
-        base_footprint   (virtual, at ground level, child of base_link)
-        wheel_left_link
-        wheel_right_link
-        caster_link      (front caster)
-        laser_frame      (LiDAR on top of body)
-        camera_frame     (camera at front-top of body)
+      base_footprint   (virtual, at ground level)
+        base_link      (cube body centre, 0.1029 m AGL)
+          wheel_left_link
+          wheel_right_link
+          caster_link      (front caster)
+          laser_frame      (LiDAR on top of body)
+          camera_frame     (camera at front-top of body)
 
   Topics
   ======
     /cmd_vel       geometry_msgs/Twist    => drive command  (ROS => gz)
     /odom          nav_msgs/Odometry      <= wheel odometry (gz => ROS)
     /scan          sensor_msgs/LaserScan  <= 360 deg LiDAR  (gz => ROS)
-    /tf            tf2_msgs/TFMessage     <= odom->base_link (gz => ROS)
+    /tf            tf2_msgs/TFMessage     <= odom->base_footprint (gz => ROS)
     /joint_states  sensor_msgs/JointState <= wheel joints   (gz => ROS)
 -->
 <sdf version="1.9">
