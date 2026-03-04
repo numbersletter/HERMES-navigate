@@ -154,10 +154,3 @@ double SelectNextFrontier::dist(
 }
 
 }  // namespace hermes_navigate
-
-// ─── Plugin registration ──────────────────────────────────────────────────────
-#include "behaviortree_cpp/bt_factory.h"
-BT_REGISTER_NODES(factory)
-{
-  factory.registerNodeType<hermes_navigate::SelectNextFrontier>("SelectNextFrontier");
-}

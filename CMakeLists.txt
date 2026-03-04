@@ -61,6 +61,7 @@ add_library(hermes_navigate_bt_plugins SHARED
   src/select_next_frontier.cpp
   src/should_do_coverage.cpp
   src/select_coverage_waypoint.cpp
+  src/bt_node_registration.cpp
 )
 target_include_directories(hermes_navigate_bt_plugins PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
