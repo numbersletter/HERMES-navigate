@@ -127,6 +127,21 @@ def generate_launch_description():
         ],
     )
 
+    # ── Lifecycle manager for coverage tracker ────────────────────────────────
+    # Without a lifecycle manager the node stays in 'unconfigured' and never
+    # creates its subscription, publisher, or timer.
+    lifecycle_manager_coverage = Node(
+        package="nav2_lifecycle_manager",
+        executable="lifecycle_manager",
+        name="lifecycle_manager_coverage",
+        output="screen",
+        parameters=[{
+            "use_sim_time": use_sim_time,
+            "autostart":    True,
+            "node_names":   ["coverage_tracker_node"],
+        }],
+    )
+
     return LaunchDescription([
         # Declare arguments
         declare_use_sim_time,
@@ -141,8 +156,9 @@ def generate_launch_description():
         # Nav2
         nav2_bringup,
 
-        # Coverage tracker
+        # Coverage tracker + its lifecycle manager
         coverage_tracker,
+        lifecycle_manager_coverage,
 
         LogInfo(msg="HERMES full exploration stack launched."),
     ])
