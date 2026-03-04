@@ -1,0 +1,52 @@
+# ros_gz_bridge.yaml
+# ===================
+# YAML configuration for the ros_gz_bridge parameter_bridge node.
+# Bridges Gazebo Harmonic (gz-sim) ↔ ROS 2 topics required by the
+# HERMES autonomous navigation and exploration stack.
+#
+# Direction notation:
+#   GZ_TO_ROS   — Gazebo publishes, ROS 2 subscribes
+#   ROS_TO_GZ   — ROS 2 publishes, Gazebo subscribes
+#   BIDIRECTIONAL — both directions
+
+# Simulation clock → ROS 2 /clock
+- ros_topic_name: "/clock"
+  gz_topic_name: "/clock"
+  ros_type_name: "rosgraph_msgs/msg/Clock"
+  gz_type_name: "gz.msgs.Clock"
+  direction: GZ_TO_ROS
+
+# Drive command: ROS 2 → Gazebo
+- ros_topic_name: "/cmd_vel"
+  gz_topic_name: "/cmd_vel"
+  ros_type_name: "geometry_msgs/msg/Twist"
+  gz_type_name: "gz.msgs.Twist"
+  direction: ROS_TO_GZ
+
+# Wheel odometry: Gazebo → ROS 2
+- ros_topic_name: "/odom"
+  gz_topic_name: "/odom"
+  ros_type_name: "nav_msgs/msg/Odometry"
+  gz_type_name: "gz.msgs.Odometry"
+  direction: GZ_TO_ROS
+
+# 2-D laser scan: Gazebo → ROS 2
+- ros_topic_name: "/scan"
+  gz_topic_name: "/scan"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "gz.msgs.LaserScan"
+  direction: GZ_TO_ROS
+
+# TF (odom → base_link from DiffDrive): Gazebo → ROS 2
+- ros_topic_name: "/tf"
+  gz_topic_name: "/tf"
+  ros_type_name: "tf2_msgs/msg/TFMessage"
+  gz_type_name: "gz.msgs.Pose_V"
+  direction: GZ_TO_ROS
+
+# Wheel joint states: Gazebo → ROS 2
+- ros_topic_name: "/joint_states"
+  gz_topic_name: "/joint_states"
+  ros_type_name: "sensor_msgs/msg/JointState"
+  gz_type_name: "gz.msgs.Model"
+  direction: GZ_TO_ROS
