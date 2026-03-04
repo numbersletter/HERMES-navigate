@@ -115,6 +115,8 @@ install(DIRECTORY
   behavior_trees
   launch
   plugins
+  urdf
+  worlds
   DESTINATION share/${PROJECT_NAME}
 )
 

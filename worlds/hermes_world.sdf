@@ -1,0 +1,253 @@
+<?xml version="1.0" ?>
+<!--
+  hermes_world.sdf
+  ================
+  A simple indoor test environment for HERMES simulation.
+
+  Layout: walled square room (4 ft × 4 ft = 1.22 m × 1.22 m)
+          with 7.5 in (0.191 m) tall outer walls, four interior
+          obstacles and a partial divider wall, giving the
+          frontier-exploration algorithm non-trivial geometry to
+          map and navigate around.
+
+  Key dimensions
+  ==============
+    Room inner:    1.22 x 1.22 m  (4 ft x 4 ft)
+    Wall thickness: 0.05 m  (~2 in)
+    Wall height:    0.191 m  (7.5 in)
+    Room half:      0.610 m  (inner edge to centre)
+    Wall centre y/x: +/-0.635 m  (room_half + wall_thickness/2)
+
+  The robot spawns near the origin (0, 0), facing +x.
+
+  Requires Gazebo Harmonic (gz-sim ≥ 7).
+-->
+<sdf version="1.9">
+  <world name="hermes_world">
+
+    <!-- ── Core Gazebo Harmonic system plugins ───────────────────────────── -->
+    <plugin filename="gz-sim-physics-system"
+            name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system"
+            name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system"
+            name="gz::sim::systems::SceneBroadcaster"/>
+    <!-- Sensors plugin: required for LiDAR (gpu_lidar) -->
+    <plugin filename="gz-sim-sensors-system"
+            name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="gz-sim-contact-system"
+            name="gz::sim::systems::Contact"/>
+
+    <!-- ── Physics ───────────────────────────────────────────────────────── -->
+    <physics name="1ms" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+
+    <!-- ── Gravity ───────────────────────────────────────────────────────── -->
+    <gravity>0 0 -9.8</gravity>
+
+    <!-- ── Lighting ──────────────────────────────────────────────────────── -->
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <attenuation>
+        <range>1000</range>
+        <constant>0.9</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+
+    <!-- ── Ground plane ──────────────────────────────────────────────────── -->
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>20 20</size>
+            </plane>
+          </geometry>
+          <surface>
+            <friction>
+              <ode>
+                <mu>100</mu>
+                <mu2>50</mu2>
+              </ode>
+            </friction>
+          </surface>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>20 20</size>
+            </plane>
+          </geometry>
+          <material>
+            <ambient>0.8 0.8 0.8 1</ambient>
+            <diffuse>0.8 0.8 0.8 1</diffuse>
+            <specular>0.8 0.8 0.8 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         Perimeter walls — 4 ft × 4 ft room (1.22 m × 1.22 m inner)
+         Wall thickness: 0.05 m   Wall height: 0.191 m  (7.5 in)
+         Room centre at origin.
+         Wall centre at ±0.635 m  (room_half 0.610 + thickness/2 0.025)
+         ══════════════════════════════════════════════════════════════════ -->
+
+    <!-- North wall  y = +0.635 -->
+    <model name="wall_north">
+      <static>true</static>
+      <pose>0 0.635 0.0955 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>1.32 0.05 0.191</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>1.32 0.05 0.191</size></box></geometry>
+          <material><ambient>0.9 0.9 0.9 1</ambient><diffuse>0.9 0.9 0.9 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- South wall  y = -0.635 -->
+    <model name="wall_south">
+      <static>true</static>
+      <pose>0 -0.635 0.0955 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>1.32 0.05 0.191</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>1.32 0.05 0.191</size></box></geometry>
+          <material><ambient>0.9 0.9 0.9 1</ambient><diffuse>0.9 0.9 0.9 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- East wall  x = +0.635 -->
+    <model name="wall_east">
+      <static>true</static>
+      <pose>0.635 0 0.0955 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.05 1.22 0.191</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.05 1.22 0.191</size></box></geometry>
+          <material><ambient>0.9 0.9 0.9 1</ambient><diffuse>0.9 0.9 0.9 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- West wall  x = -0.635 -->
+    <model name="wall_west">
+      <static>true</static>
+      <pose>-0.635 0 0.0955 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.05 1.22 0.191</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.05 1.22 0.191</size></box></geometry>
+          <material><ambient>0.9 0.9 0.9 1</ambient><diffuse>0.9 0.9 0.9 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         Interior obstacles — give the frontier explorer real geometry.
+         Obstacle height = 0.191 m (same as walls); centres at z=0.0955 m.
+         Tops at 0.191 m and LiDAR scan plane at ~0.173 m AGL ensures
+         the scan beam intersects every obstacle.
+         ══════════════════════════════════════════════════════════════════ -->
+
+    <!-- Column obstacle NE quadrant -->
+    <model name="obstacle_1">
+      <static>true</static>
+      <pose>0.25 0.20 0.0955 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.05 0.05 0.191</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.05 0.05 0.191</size></box></geometry>
+          <material><ambient>0.6 0.4 0.2 1</ambient><diffuse>0.6 0.4 0.2 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Column obstacle SW quadrant -->
+    <model name="obstacle_2">
+      <static>true</static>
+      <pose>-0.25 -0.20 0.0955 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.05 0.05 0.191</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.05 0.05 0.191</size></box></geometry>
+          <material><ambient>0.6 0.4 0.2 1</ambient><diffuse>0.6 0.4 0.2 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Partial divider wall (east half, leaves a gap on the west side) -->
+    <model name="divider_wall">
+      <static>true</static>
+      <pose>0.18 0 0.0955 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.35 0.025 0.191</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.35 0.025 0.191</size></box></geometry>
+          <material><ambient>0.85 0.85 0.85 1</ambient><diffuse>0.85 0.85 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Box obstacle SE quadrant -->
+    <model name="obstacle_3">
+      <static>true</static>
+      <pose>0.30 -0.25 0.0955 0 0 0.785</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.07 0.04 0.191</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.07 0.04 0.191</size></box></geometry>
+          <material><ambient>0.2 0.5 0.8 1</ambient><diffuse>0.2 0.5 0.8 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Box obstacle NW quadrant -->
+    <model name="obstacle_4">
+      <static>true</static>
+      <pose>-0.30 0.25 0.0955 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.07 0.04 0.191</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.07 0.04 0.191</size></box></geometry>
+          <material><ambient>0.2 0.5 0.8 1</ambient><diffuse>0.2 0.5 0.8 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+  </world>
+</sdf>
