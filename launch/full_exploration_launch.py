@@ -30,6 +30,7 @@ Launch arguments
 
 import os
 
+import xacro
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import (
@@ -47,7 +48,7 @@ def generate_launch_description():
     pkg_nav2_bringup    = get_package_share_directory("nav2_bringup")
 
     # ── Paths to config files ─────────────────────────────────────────────────
-    sdf_file         = os.path.join(pkg_hermes_navigate, "urdf", "hermes_sim.sdf")
+    sdf_xacro_file   = os.path.join(pkg_hermes_navigate, "urdf", "hermes_sim.sdf.xacro")
     nav2_params_file = os.path.join(pkg_hermes_navigate, "config", "nav2_params.yaml")
     slam_params_file = os.path.join(pkg_hermes_navigate, "config",
                                     "slam_toolbox_params.yaml")
@@ -65,11 +66,10 @@ def generate_launch_description():
 
     use_sim_time = LaunchConfiguration("use_sim_time")
 
-    # ── Robot description (read SDF) ──────────────────────────────────────────
-    #   robot_state_publisher accepts SDF content; sdformat_urdf converts it
-    #   to URDF internally and publishes the static joint TFs.
-    with open(sdf_file, "r") as f:
-        robot_description_content = f.read()
+    # ── Robot description (process SDF xacro) ────────────────────────────────
+    #   xacro expands the wheel macro then hands clean SDF to RSP.
+    #   robot_state_publisher accepts SDF content via sdformat_urdf.
+    robot_description_content = xacro.process_file(sdf_xacro_file).toxml()
 
     # ── robot_state_publisher ─────────────────────────────────────────────────
     robot_state_pub = Node(
