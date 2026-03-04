@@ -5,40 +5,15 @@
   Simulation SDF model for the HERMES differential-drive robot.
   Designed for Gazebo Harmonic (gz-sim) with ROS 2 Jazzy.
 
-  This file is processed by xacro before use.  The <xacro:macro name="wheel">
-  block defines a single wheel (link + revolute joint) that is instantiated
-  twice — once for the left side and once for the right side — removing the
-  need to duplicate the ~30-line definition.
-
-  Robot geometry
-  ==============
-    Body:         cube  5.5 x 5.5 x 5.5 in  (0.1397 x 0.1397 x 0.1397 m)
-    Drive wheels: diameter 2.6 in (r = 0.0330 m), width 0.7 in (0.0178 m)
-    Caster:       sphere, radius = wheel_radius/2 = 0.0165 m, placed at FRONT
-
-  Wheel macro parameters
-  ======================
-    prefix  : "left" or "right" — used in link/joint names
-    y_pos   : signed y position from base_link centre (m)
-                left  = +0.0788 m   (body_size/2 + wheel_width/2)
-                right = -0.0788 m
-
-  Key dimensions (all metres)
-  ===========================
-    body_size      = 0.1397   (5.5 in)
-    wheel_radius   = 0.0330   (1.3 in)
-    wheel_width    = 0.0178   (0.7 in)
-    wheel_y        = body_size/2 + wheel_width/2 = 0.0699 + 0.0089 = 0.0788
-    wheel_sep      = 2 x wheel_y = 0.1575   (centre-to-centre)
-    caster_radius  = wheel_radius / 2 = 0.0165
-    body_z_spawn   = wheel_radius + body_size/2 = 0.0330 + 0.0699 = 0.1029
-                     (body bottom sits at wheel_radius above ground; wheels touch ground)
+  All primary dimensions are declared as <xacro:property> at the top of
+  the file.  Derived values (half-lengths, offsets, inertias) are computed
+  from those primaries so that a single edit propagates everywhere.
 
   TF tree produced at runtime
   ===========================
     odom  <- (DiffDrive plugin via /tf bridge)
       base_footprint   (virtual, at ground level)
-        base_link      (cube body centre, 0.1029 m AGL)
+        base_link      (cube body centre, body_z m AGL)
           wheel_left_link
           wheel_right_link
           caster_link      (front caster)
@@ -55,25 +30,81 @@
 -->
 <sdf version="1.9" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <!-- ── Wheel macro (link + revolute joint) ──────────────────────────────── -->
-  <!--   prefix : "left" or "right" — used in link/joint names               -->
-  <!--   y_pos  : signed y distance from base_link centre (m)                -->
-  <!--            left = +0.0788, right = -0.0788                            -->
+  <!-- ════════════════════════════════════════════════════════════════════════
+       Primary dimensions  (edit here; everything else is derived)
+       ════════════════════════════════════════════════════════════════════════ -->
+
+  <!-- Body: cube 5.5 in per side -->
+  <xacro:property name="body_size" value="0.1397"/>   <!-- m  (5.5 in) -->
+  <xacro:property name="body_mass" value="5.0"/>       <!-- kg -->
+
+  <!-- Drive wheels: 2.6 in diameter, 0.7 in wide -->
+  <xacro:property name="wheel_radius" value="0.0330"/> <!-- m  (1.3 in) -->
+  <xacro:property name="wheel_width"  value="0.0178"/> <!-- m  (0.7 in) -->
+  <xacro:property name="wheel_mass"   value="0.5"/>    <!-- kg -->
+
+  <!-- Caster: passive front sphere -->
+  <xacro:property name="caster_mass"  value="0.1"/>    <!-- kg -->
+
+  <!-- ── Derived geometry ──────────────────────────────────────────────────── -->
+  <xacro:property name="body_half"     value="${body_size   / 2}"/>
+  <xacro:property name="caster_radius" value="${wheel_radius / 2}"/>
+
+  <!-- wheel_y : lateral distance from base_link centre to wheel centre -->
+  <xacro:property name="wheel_y"   value="${body_half + wheel_width / 2}"/>
+  <!-- wheel_sep : centre-to-centre track width (used by DiffDrive plugin) -->
+  <xacro:property name="wheel_sep" value="${2 * wheel_y}"/>
+
+  <!-- body_z : height of base_link centre above ground when spawned -->
+  <!--          = wheel_radius + body_half                           -->
+  <xacro:property name="body_z"    value="${wheel_radius + body_half}"/>
+
+  <!-- wheel_z : z of wheel axle relative to base_link (= -body_half) -->
+  <xacro:property name="wheel_z"   value="${-body_half}"/>
+
+  <!-- caster_x : forward offset of caster centre from base_link -->
+  <xacro:property name="caster_x"  value="${body_half - caster_radius}"/>
+  <!-- caster_z : z of caster centre relative to base_link        -->
+  <xacro:property name="caster_z"  value="${caster_radius - body_z}"/>
+
+  <!-- ── Derived inertias ──────────────────────────────────────────────────── -->
+  <!-- Solid cube:     I = m * s² / 6                                          -->
+  <xacro:property name="body_ixx"
+      value="${body_mass * body_size**2 / 6}"/>
+
+  <!-- Solid cylinder: Ixx = Iyy = m*(3r²+h²)/12,  Izz = m*r²/2              -->
+  <xacro:property name="wheel_ixx"
+      value="${wheel_mass * (3 * wheel_radius**2 + wheel_width**2) / 12}"/>
+  <xacro:property name="wheel_izz"
+      value="${wheel_mass * wheel_radius**2 / 2}"/>
+
+  <!-- Solid sphere:   I = 2*m*r² / 5                                          -->
+  <xacro:property name="caster_ixx"
+      value="${2 * caster_mass * caster_radius**2 / 5}"/>
+
+  <!-- ════════════════════════════════════════════════════════════════════════
+       Wheel macro  —  one link + one revolute joint
+         prefix : "left" or "right"
+         y_pos  : signed lateral offset from base_link centre (m)
+                  pass ${wheel_y} for left, ${-wheel_y} for right
+       ════════════════════════════════════════════════════════════════════════ -->
   <xacro:macro name="wheel" params="prefix y_pos">
     <link name="wheel_${prefix}_link">
-      <pose relative_to="base_link">0 ${y_pos} -0.0699 1.5708 0 0</pose>
+      <pose relative_to="base_link">0 ${y_pos} ${wheel_z} 1.5708 0 0</pose>
       <inertial>
-        <mass>0.5</mass>
-        <!-- Solid cylinder: Ixx=Iyy=m(3r²+h²)/12, Izz=mr²/2 -->
+        <mass>${wheel_mass}</mass>
         <inertia>
-          <ixx>0.000149</ixx><ixy>0</ixy><ixz>0</ixz>
-          <iyy>0.000149</iyy><iyz>0</iyz>
-          <izz>0.000272</izz>
+          <ixx>${wheel_ixx}</ixx><ixy>0</ixy><ixz>0</ixz>
+          <iyy>${wheel_ixx}</iyy><iyz>0</iyz>
+          <izz>${wheel_izz}</izz>
         </inertia>
       </inertial>
       <visual name="visual">
         <geometry>
-          <cylinder><radius>0.0330</radius><length>0.0178</length></cylinder>
+          <cylinder>
+            <radius>${wheel_radius}</radius>
+            <length>${wheel_width}</length>
+          </cylinder>
         </geometry>
         <material>
           <ambient>0.1 0.1 0.1 1</ambient>
@@ -82,7 +113,10 @@
       </visual>
       <collision name="collision">
         <geometry>
-          <cylinder><radius>0.0330</radius><length>0.0178</length></cylinder>
+          <cylinder>
+            <radius>${wheel_radius}</radius>
+            <length>${wheel_width}</length>
+          </cylinder>
         </geometry>
         <surface>
           <friction><ode><mu>1.0</mu><mu2>1.0</mu2></ode></friction>
@@ -100,22 +134,24 @@
     </joint>
   </xacro:macro>
 
+  <!-- ════════════════════════════════════════════════════════════════════════
+       Model
+       ════════════════════════════════════════════════════════════════════════ -->
   <model name="hermes">
 
-    <!-- ── base_link (cube body) ──────────────────────────────────────────── -->
+    <!-- ── base_link (cube body) ─────────────────────────────────────────── -->
     <link name="base_link">
       <inertial>
-        <mass>5.0</mass>
-        <!-- Solid cube: I = m·s²/6 = 5.0·0.1397²/6 ≈ 0.01627 each axis -->
+        <mass>${body_mass}</mass>
         <inertia>
-          <ixx>0.01627</ixx><ixy>0</ixy><ixz>0</ixz>
-          <iyy>0.01627</iyy><iyz>0</iyz>
-          <izz>0.01627</izz>
+          <ixx>${body_ixx}</ixx><ixy>0</ixy><ixz>0</ixz>
+          <iyy>${body_ixx}</iyy><iyz>0</iyz>
+          <izz>${body_ixx}</izz>
         </inertia>
       </inertial>
       <visual name="visual">
         <geometry>
-          <box><size>0.1397 0.1397 0.1397</size></box>
+          <box><size>${body_size} ${body_size} ${body_size}</size></box>
         </geometry>
         <material>
           <ambient>0.3 0.3 0.3 1</ambient>
@@ -124,15 +160,14 @@
       </visual>
       <collision name="collision">
         <geometry>
-          <box><size>0.1397 0.1397 0.1397</size></box>
+          <box><size>${body_size} ${body_size} ${body_size}</size></box>
         </geometry>
       </collision>
     </link>
 
-    <!-- ── base_footprint (virtual, at ground level — child of base_link) ─── -->
-    <!--   z offset = -(wheel_radius + body_size/2) = -0.1029 m              -->
+    <!-- ── base_footprint (virtual, at ground level) ─────────────────────── -->
     <link name="base_footprint">
-      <pose relative_to="base_link">0 0 -0.1029 0 0 0</pose>
+      <pose relative_to="base_link">0 0 ${-body_z} 0 0 0</pose>
     </link>
 
     <joint name="base_footprint_joint" type="fixed">
@@ -140,30 +175,24 @@
       <child>base_footprint</child>
     </joint>
 
-    <!-- ── Drive wheels ──────────────────────────────────────────────────────
-         Each wheel (link + revolute joint) is generated by the macro above.
-         Only the side name and signed y position differ between the two.
-    ── ────────────────────────────────────────────────────────────────────── -->
-    <xacro:wheel prefix="left"  y_pos="0.0788"/>
-    <xacro:wheel prefix="right" y_pos="-0.0788"/>
+    <!-- ── Drive wheels ──────────────────────────────────────────────────── -->
+    <xacro:wheel prefix="left"  y_pos="${wheel_y}"/>
+    <xacro:wheel prefix="right" y_pos="${-wheel_y}"/>
 
-    <!-- ── Caster wheel (FRONT, passive, zero friction) ───────────────────── -->
-    <!--   x  = body_size/2 - caster_radius = 0.0699 - 0.0165 = 0.0534 m    -->
-    <!--   z  = caster_radius - body_z_spawn = 0.0165 - 0.1029 = -0.0864 m  -->
+    <!-- ── Caster wheel (front, passive, zero friction) ──────────────────── -->
     <link name="caster_link">
-      <pose relative_to="base_link">0.0534 0 -0.0864 0 0 0</pose>
+      <pose relative_to="base_link">${caster_x} 0 ${caster_z} 0 0 0</pose>
       <inertial>
-        <mass>0.1</mass>
-        <!-- Solid sphere: I = 2mr²/5 -->
+        <mass>${caster_mass}</mass>
         <inertia>
-          <ixx>0.00001</ixx><ixy>0</ixy><ixz>0</ixz>
-          <iyy>0.00001</iyy><iyz>0</iyz>
-          <izz>0.00001</izz>
+          <ixx>${caster_ixx}</ixx><ixy>0</ixy><ixz>0</ixz>
+          <iyy>${caster_ixx}</iyy><iyz>0</iyz>
+          <izz>${caster_ixx}</izz>
         </inertia>
       </inertial>
       <visual name="visual">
         <geometry>
-          <sphere><radius>0.0165</radius></sphere>
+          <sphere><radius>${caster_radius}</radius></sphere>
         </geometry>
         <material>
           <ambient>0.6 0.6 0.6 1</ambient>
@@ -172,7 +201,7 @@
       </visual>
       <collision name="collision">
         <geometry>
-          <sphere><radius>0.0165</radius></sphere>
+          <sphere><radius>${caster_radius}</radius></sphere>
         </geometry>
         <surface>
           <friction><ode><mu>0.0</mu><mu2>0.0</mu2></ode></friction>
@@ -185,11 +214,9 @@
       <child>caster_link</child>
     </joint>
 
-    <!-- ── laser_frame (2-D LiDAR, on top of body) ───────────────────────── -->
-    <!--   z = +body_size/2 = +0.0699 m relative to base_link centre         -->
-    <!--   Absolute scan height = body_z_spawn + 0.0699 = 0.173 m AGL        -->
+    <!-- ── laser_frame (2-D LiDAR, top of body) ─────────────────────────── -->
     <link name="laser_frame">
-      <pose relative_to="base_link">0 0 0.0699 0 0 0</pose>
+      <pose relative_to="base_link">0 0 ${body_half} 0 0 0</pose>
       <inertial>
         <mass>0.1</mass>
         <inertia>
@@ -212,7 +239,7 @@
           <cylinder><radius>0.04</radius><length>0.04</length></cylinder>
         </geometry>
       </collision>
-      <!-- 2-D LiDAR (360°, 10 Hz, 12 m range) -->
+      <!-- 2-D LiDAR (360 deg, 10 Hz, 12 m range) -->
       <sensor name="lidar" type="gpu_lidar">
         <topic>/scan</topic>
         <update_rate>10</update_rate>
@@ -247,10 +274,8 @@
     </joint>
 
     <!-- ── camera_frame (front-top corner of body) ───────────────────────── -->
-    <!--   x = body_size/2 = 0.0699 m (front face)                           -->
-    <!--   z = body_size/2 = 0.0699 m (top face)                             -->
     <link name="camera_frame">
-      <pose relative_to="base_link">0.0699 0 0.0699 0 0 0</pose>
+      <pose relative_to="base_link">${body_half} 0 ${body_half} 0 0 0</pose>
       <inertial>
         <mass>0.05</mass>
         <inertia>
@@ -275,17 +300,17 @@
       <child>camera_frame</child>
     </joint>
 
-    <!-- ══════════════════════════════════════════════════════════════════════
+    <!-- ════════════════════════════════════════════════════════════════════
          Gazebo Harmonic (gz-sim) plugins
-         ══════════════════════════════════════════════════════════════════════ -->
+         ════════════════════════════════════════════════════════════════════ -->
 
     <!-- Differential drive controller -->
     <plugin filename="gz-sim-diff-drive-system"
             name="gz::sim::systems::DiffDrive">
       <left_joint>wheel_left_joint</left_joint>
       <right_joint>wheel_right_joint</right_joint>
-      <wheel_separation>0.1575</wheel_separation>
-      <wheel_radius>0.0330</wheel_radius>
+      <wheel_separation>${wheel_sep}</wheel_separation>
+      <wheel_radius>${wheel_radius}</wheel_radius>
       <odom_publish_frequency>20</odom_publish_frequency>
       <topic>cmd_vel</topic>
       <odom_topic>odom</odom_topic>
