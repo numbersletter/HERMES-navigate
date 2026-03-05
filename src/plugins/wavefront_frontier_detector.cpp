@@ -15,6 +15,7 @@
 #include "hermes_navigate/plugins/wavefront_frontier_detector.hpp"
 
 #include <algorithm>
+#include <climits>
 #include <cmath>
 #include <queue>
 #include <unordered_set>
@@ -108,7 +109,7 @@ std::vector<std::pair<int, int>> WavefrontFrontierDetector::detectFrontierCells(
   const nav2_msgs::msg::Costmap & costmap,
   int robot_gx, int robot_gy)
 {
-  using namespace costmap;  // NOLINT(build/namespaces)
+  using namespace hermes_navigate::costmap;  // NOLINT(build/namespaces)
 
   const int width  = static_cast<int>(costmap.metadata.size_x);
   const int height = static_cast<int>(costmap.metadata.size_y);
