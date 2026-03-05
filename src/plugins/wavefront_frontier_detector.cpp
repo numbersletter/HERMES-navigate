@@ -15,6 +15,7 @@
 #include "hermes_navigate/plugins/wavefront_frontier_detector.hpp"
 
 #include <algorithm>
+#include <climits>
 #include <cmath>
 #include <queue>
 #include <unordered_set>

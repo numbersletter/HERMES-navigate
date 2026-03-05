@@ -93,7 +93,7 @@ int InformationGainPlugin::castRay(
   double dir_x, double dir_y,
   int max_steps) const
 {
-  using namespace costmap;  // NOLINT(build/namespaces)
+  using namespace hermes_navigate::costmap;  // NOLINT(build/namespaces)
 
   const int width  = static_cast<int>(costmap.metadata.size_x);
   const int height = static_cast<int>(costmap.metadata.size_y);
