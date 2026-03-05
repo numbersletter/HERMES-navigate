@@ -130,4 +130,17 @@ void ReturnToStartNode::onHalted()
   goal_handle_.reset();
 }
 
+// ─── Factory registration ─────────────────────────────────────────────────────
+
+void ReturnToStartNode::registerWithFactory(
+  BT::BehaviorTreeFactory & factory,
+  rclcpp_lifecycle::LifecycleNode::WeakPtr parent)
+{
+  factory.registerBuilder<ReturnToStartNode>(
+    "ReturnToStart",
+    [parent](const std::string & name, const BT::NodeConfig & config) {
+      return std::make_unique<ReturnToStartNode>(name, config, parent);
+    });
+}
+
 }  // namespace hermes_navigate
