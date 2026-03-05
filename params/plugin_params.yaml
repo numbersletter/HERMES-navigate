@@ -1,0 +1,57 @@
+# =============================================================================
+# HERMES Navigate — Plugin Parameters
+# =============================================================================
+# This file contains runtime-configurable parameters for all pluginlib plugins
+# used by hermes_navigate.  It is loaded by the hermes_navigate_launch.py
+# launch file and passed to the hermes_navigate_node lifecycle node.
+#
+# All parameters are nested under the hermes_navigate_node namespace so they
+# are accessible via node->get_parameter("<key>").
+# =============================================================================
+
+hermes_navigate_node:
+  ros__parameters:
+
+    # ── BT configuration ──────────────────────────────────────────────────────
+    bt_tick_rate_hz: 10.0       # BT tick frequency [Hz]
+    base_frame: "base_link"     # Robot base TF frame
+    map_frame: "map"            # Map TF frame
+    robot_pose_topic: "/robot_pose"
+
+    # ── Frontier search plugin selection ──────────────────────────────────────
+    # Change to any other BaseFrontierSearch plugin type to swap the algorithm.
+    frontier_search:
+      plugin: "hermes_navigate::WavefrontFrontierDetector"
+
+    # ── WavefrontFrontierDetector parameters ──────────────────────────────────
+    wavefront_frontier_detector:
+      min_frontier_size:   3      # Minimum cells to form a valid frontier cluster
+      clustering_distance: 0.5    # Max distance (m) between cells in a cluster
+      search_distance:     10.0   # BFS search radius from robot (m); 0 = unlimited
+
+    # ── Cost plugin selection (ordered list; scores are summed) ───────────────
+    cost_plugins:
+      - "hermes_navigate::InformationGainPlugin"
+      - "hermes_navigate::EuclideanPlugin"
+
+    # Canonical parameter-namespace names matching the list above
+    cost_plugin_names:
+      - "information_gain"
+      - "euclidean"
+
+    # ── InformationGainPlugin parameters ──────────────────────────────────────
+    # Scores a frontier by the number of unknown cells visible via ray-casting.
+    information_gain:
+      weight:           1.0   # Score multiplier (positive = attractive)
+      max_ray_length_m: 5.0   # Maximum ray length [m]
+      num_rays:         36    # Number of rays cast (angular resolution)
+
+    # ── EuclideanPlugin parameters ────────────────────────────────────────────
+    # Penalises frontiers that are far from the robot.
+    euclidean:
+      weight: -0.5            # Negative: larger distance → more-negative contribution
+
+    # ── SelectFrontierNode parameters ─────────────────────────────────────────
+    select_frontier:
+      hysteresis_factor:   0.15   # Fraction above current score needed to switch goal
+      min_frontier_score: -1.0e9  # Minimum score to consider a frontier viable

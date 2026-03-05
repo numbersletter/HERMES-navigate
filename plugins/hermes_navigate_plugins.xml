@@ -1,0 +1,43 @@
+<library path="hermes_navigate_plugins">
+
+  <!-- ── Frontier Search Plugins (inherit BaseFrontierSearch) ───────────── -->
+
+  <class type="hermes_navigate::WavefrontFrontierDetector"
+         base_class_type="hermes_navigate::BaseFrontierSearch">
+    <description>
+      Incremental Wavefront Frontier Detector (WFD).
+      BFS from the robot's current position through free costmap cells;
+      labels free cells adjacent to unknown cells as frontier cells;
+      clusters adjacent frontier cells and discards small clusters.
+      Runtime params (plugin_params.yaml):
+        wavefront_frontier_detector.min_frontier_size
+        wavefront_frontier_detector.clustering_distance
+        wavefront_frontier_detector.search_distance
+    </description>
+  </class>
+
+  <!-- ── Cost Plugins (inherit BaseCostPlugin) ──────────────────────────── -->
+
+  <class type="hermes_navigate::InformationGainPlugin"
+         base_class_type="hermes_navigate::BaseCostPlugin">
+    <description>
+      Scores a frontier by counting unknown cells visible from the frontier
+      centroid via radial ray-casting through the global costmap.
+      Runtime params (plugin_params.yaml):
+        information_gain.weight
+        information_gain.max_ray_length_m
+        information_gain.num_rays
+    </description>
+  </class>
+
+  <class type="hermes_navigate::EuclideanPlugin"
+         base_class_type="hermes_navigate::BaseCostPlugin">
+    <description>
+      Penalises frontiers by their Euclidean distance from the robot.
+      Returns weight * distance (weight is typically negative).
+      Runtime params (plugin_params.yaml):
+        euclidean.weight
+    </description>
+  </class>
+
+</library>
