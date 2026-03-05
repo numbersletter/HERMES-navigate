@@ -27,7 +27,9 @@ What is started
   4. Gazebo entity spawner  — spawns the HERMES robot in Gazebo from SDF
   5. slam_toolbox           — online async SLAM (map → odom TF + /map)
   6. Nav2 full stack        — planner / controller / BT navigator
-  7. coverage_tracker_node  — lifecycle camera-coverage tracker
+  7. hermes_navigate_node   — lifecycle frontier-exploration BT controller
+  8. coverage_tracker_node  — lifecycle camera-coverage tracker
+  9. lifecycle_manager      — auto-configures and activates hermes_navigate_node and coverage_tracker_node
 
 All nodes run with use_sim_time=true so they synchronise on /clock.
 
@@ -80,8 +82,10 @@ def generate_launch_description():
                                    "slam_toolbox_params.yaml")
     nav2_params     = os.path.join(pkg_hermes_navigate, "config",
                                    "sim_nav2_params.yaml")
+    plugin_params   = os.path.join(pkg_hermes_navigate, "params",
+                                   "plugin_params.yaml")
     explore_bt      = os.path.join(pkg_hermes_navigate, "behavior_trees",
-                                   "explore_and_cover.xml")
+                                   "hermes_exploration_bt.xml")
 
     # ── Launch arguments ──────────────────────────────────────────────────────
     declare_world = DeclareLaunchArgument(
@@ -182,19 +186,39 @@ def generate_launch_description():
         ],
     )
 
-    # ── 6. Nav2 (navigation + HERMES custom exploration BT) ───────────────────
+    # ── 6. Nav2 (navigation stack) ────────────────────────────────────────────
+    #   Nav2 handles NavigateToPose requests from hermes_navigate_node.
+    #   It uses its built-in navigate_to_pose BT for each individual navigation
+    #   action; high-level exploration is controlled by hermes_navigate_node.
     nav2_bringup = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(pkg_nav2_bringup, "launch", "navigation_launch.py")
         ),
         launch_arguments={
-            "use_sim_time":            "true",
-            "params_file":             nav2_params,
-            "default_bt_xml_filename": explore_bt,
+            "use_sim_time": "true",
+            "params_file":  nav2_params,
         }.items(),
     )
 
-    # ── 7. Coverage Tracker Node (lifecycle) ──────────────────────────────────
+    # ── 7. HermesNavigateNode (frontier exploration lifecycle node) ───────────
+    #   Runs the exploration BT (hermes_exploration_bt.xml) which calls
+    #   nav2's NavigateToPose action to drive the robot to each frontier.
+    hermes_navigate = LifecycleNode(
+        package="hermes_navigate",
+        executable="hermes_navigate_node",
+        name="hermes_navigate_node",
+        namespace="",
+        output="screen",
+        parameters=[
+            plugin_params,
+            {
+                "bt_xml_file":  explore_bt,
+                "use_sim_time": True,
+            },
+        ],
+    )
+
+    # ── 8. Coverage Tracker Node (lifecycle) ──────────────────────────────────
     coverage_tracker = LifecycleNode(
         package="hermes_navigate",
         executable="coverage_tracker_node",
@@ -209,6 +233,24 @@ def generate_launch_description():
             "map_frame":          "map",
             "camera_yaw_offset":  0.0,
             "use_sim_time":       True,
+        }],
+    )
+
+    # ── 9. Lifecycle Manager ───────────────────────────────────────────────────
+    #   Automatically configures and activates hermes_navigate_node and
+    #   coverage_tracker_node after the navigation stack is ready.
+    lifecycle_manager = Node(
+        package="nav2_lifecycle_manager",
+        executable="lifecycle_manager",
+        name="lifecycle_manager_hermes",
+        output="screen",
+        parameters=[{
+            "use_sim_time": True,
+            "autostart":    True,
+            "node_names": [
+                "hermes_navigate_node",
+                "coverage_tracker_node",
+            ],
         }],
     )
 
@@ -229,7 +271,9 @@ def generate_launch_description():
         # Autonomy stack
         slam_toolbox,
         nav2_bringup,
+        hermes_navigate,
         coverage_tracker,
+        lifecycle_manager,
 
         LogInfo(msg="HERMES simulation ready — all nodes launched."),
     ])
