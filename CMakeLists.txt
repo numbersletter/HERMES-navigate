@@ -10,6 +10,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 find_package(ament_cmake REQUIRED)
+find_package(ament_index_cpp REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
@@ -30,11 +31,12 @@ find_package(visualization_msgs REQUIRED)
 find_package(pluginlib REQUIRED)
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Shared dependency list for BT plugin targets
+# Shared dependency list re-used across multiple targets
 # ──────────────────────────────────────────────────────────────────────────────
-set(BT_PLUGIN_DEPS
+set(COMMON_DEPS
   rclcpp
   rclcpp_action
+  rclcpp_lifecycle
   nav2_behavior_tree
   nav2_msgs
   nav2_util
@@ -48,30 +50,76 @@ set(BT_PLUGIN_DEPS
   std_msgs
   visualization_msgs
   pluginlib
+  ament_index_cpp
 )
 
 # ──────────────────────────────────────────────────────────────────────────────
-# BT Plugin shared library
-# All five BT nodes compiled into a single plugin .so that Nav2 BT Navigator
-# loads at runtime via pluginlib / class_loader.
+# hermes_navigate_plugins — pluginlib shared library
+#   Contains BaseFrontierSearch and BaseCostPlugin implementations:
+#     WavefrontFrontierDetector, InformationGainPlugin, EuclideanPlugin
+# ──────────────────────────────────────────────────────────────────────────────
+add_library(hermes_navigate_plugins SHARED
+  src/plugins/wavefront_frontier_detector.cpp
+  src/plugins/information_gain_plugin.cpp
+  src/plugins/euclidean_plugin.cpp
+)
+target_include_directories(hermes_navigate_plugins PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+ament_target_dependencies(hermes_navigate_plugins ${COMMON_DEPS})
+pluginlib_export_plugin_description_file(
+  hermes_navigate plugins/hermes_navigate_plugins.xml)
+
+# ──────────────────────────────────────────────────────────────────────────────
+# hermes_navigate_bt_plugins — BT node shared library
+#   Loaded by Nav2 BT Navigator (legacy) and by HermesNavigateNode (new).
+#   Single BT_REGISTER_NODES in src/bt_plugins/register_nodes.cpp.
 # ──────────────────────────────────────────────────────────────────────────────
 add_library(hermes_navigate_bt_plugins SHARED
+  # Legacy BT nodes (backward compat with explore_and_cover.xml)
   src/compute_frontiers.cpp
   src/score_frontiers.cpp
   src/select_next_frontier.cpp
   src/should_do_coverage.cpp
   src/select_coverage_waypoint.cpp
+  # New structured BT nodes
+  src/bt_plugins/search_frontiers_node.cpp
+  src/bt_plugins/assign_costs_node.cpp
+  src/bt_plugins/select_frontier_node.cpp
+  src/bt_plugins/return_to_start_node.cpp
+  src/bt_plugins/navigate_to_frontier_node.cpp
+  # Central BT_REGISTER_NODES (must be exactly one per .so)
+  src/bt_plugins/register_nodes.cpp
 )
 target_include_directories(hermes_navigate_bt_plugins PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
-ament_target_dependencies(hermes_navigate_bt_plugins ${BT_PLUGIN_DEPS})
-# Mark the library so pluginlib knows it's a plugin
-pluginlib_export_plugin_description_file(nav2_behavior_tree plugins/hermes_navigate_bt_plugins.xml)
+ament_target_dependencies(hermes_navigate_bt_plugins ${COMMON_DEPS})
+target_link_libraries(hermes_navigate_bt_plugins hermes_navigate_plugins)
+# Register BT nodes so Nav2 BT Navigator can discover the legacy nodes
+pluginlib_export_plugin_description_file(
+  nav2_behavior_tree plugins/hermes_navigate_bt_plugins.xml)
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Standalone coverage tracker node executable
+# hermes_navigate_node — main lifecycle node executable
+# ──────────────────────────────────────────────────────────────────────────────
+add_executable(hermes_navigate_node
+  src/hermes_navigate_node.cpp
+)
+target_include_directories(hermes_navigate_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+ament_target_dependencies(hermes_navigate_node ${COMMON_DEPS})
+target_link_libraries(hermes_navigate_node
+  hermes_navigate_bt_plugins
+  hermes_navigate_plugins
+)
+
+# ──────────────────────────────────────────────────────────────────────────────
+# coverage_tracker_node — standalone lifecycle node executable
 # ──────────────────────────────────────────────────────────────────────────────
 add_executable(coverage_tracker_node
   src/coverage_tracker_node.cpp
@@ -99,7 +147,9 @@ ament_target_dependencies(coverage_tracker_node
 # Install targets
 # ──────────────────────────────────────────────────────────────────────────────
 install(TARGETS
+  hermes_navigate_plugins
   hermes_navigate_bt_plugins
+  hermes_navigate_node
   coverage_tracker_node
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
@@ -114,6 +164,7 @@ install(DIRECTORY
   config
   behavior_trees
   launch
+  params
   plugins
   urdf
   worlds

@@ -22,17 +22,12 @@
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav2_msgs/msg/costmap.hpp"
 #include "rclcpp/rclcpp.hpp"
-#include "hermes_navigate/compute_frontiers.hpp"
+
+// ScoredFrontier and Frontier are now defined in the common header
+#include "hermes_navigate/frontier_types.hpp"
 
 namespace hermes_navigate
 {
-
-/// @brief A Frontier with an associated score.
-struct ScoredFrontier
-{
-  Frontier frontier;
-  double score{0.0};
-};
 
 /**
  * @class ScoreFrontiers

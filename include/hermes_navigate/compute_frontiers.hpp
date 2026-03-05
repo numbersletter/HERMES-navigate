@@ -24,17 +24,11 @@
 #include "rclcpp/rclcpp.hpp"
 #include "nav2_behavior_tree/bt_action_node.hpp"
 
+// Frontier types are now defined in the common header
+#include "hermes_navigate/frontier_types.hpp"
+
 namespace hermes_navigate
 {
-
-/// @brief Struct representing a detected frontier cluster.
-struct Frontier
-{
-  double centroid_x{0.0};
-  double centroid_y{0.0};
-  int size{0};  ///< Number of frontier cells in the cluster.
-  geometry_msgs::msg::PoseStamped goal_pose;
-};
 
 /**
  * @class ComputeFrontiers
