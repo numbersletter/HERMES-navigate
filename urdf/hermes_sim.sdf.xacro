@@ -1,335 +1,420 @@
-<?xml version="1.0"?>
-<!--
-  hermes_sim.sdf.xacro
-  ====================
-  Simulation SDF model for the HERMES differential-drive robot.
-  Designed for Gazebo Harmonic (gz-sim) with ROS 2 Jazzy.
+<?xml version="1.0" ?>
+<sdf version="1.8" xmlns:xacro="http://ros.org/wiki/xacro">
+  <model name='hermes_robot' canonical_link='base_link'>
 
-  All primary dimensions are declared as <xacro:property> at the top of
-  the file.  Derived values (half-lengths, offsets, inertias) are computed
-  from those primaries so that a single edit propagates everywhere.
+    <!-- Define robot constants -->
+    <xacro:property name="base_width" value="0.31"/>
+    <xacro:property name="base_length" value="0.42"/>
+    <xacro:property name="base_height" value="0.18"/>
 
-  TF tree produced at runtime
-  ===========================
-    odom  <- (DiffDrive plugin via /tf bridge)
-      base_footprint   (virtual, at ground level)
-        base_link      (cube body centre, body_z m AGL)
-          wheel_left_link
-          wheel_right_link
-          caster_link      (front caster)
-          laser_frame      (LiDAR on top of body)
-          camera_frame     (camera at front-top of body)
+    <xacro:property name="wheel_radius" value="0.10"/>
+    <xacro:property name="wheel_width" value="0.04"/>
+    <xacro:property name="wheel_ygap" value="0.025"/>
+    <xacro:property name="wheel_zoff" value="0.05"/>
+    <xacro:property name="wheel_xoff" value="0.12"/>
 
-  Topics
-  ======
-    /cmd_vel       geometry_msgs/Twist    => drive command  (ROS => gz)
-    /odom          nav_msgs/Odometry      <= wheel odometry (gz => ROS)
-    /scan          sensor_msgs/LaserScan  <= 360 deg LiDAR  (gz => ROS)
-    /tf            tf2_msgs/TFMessage     <= odom->base_footprint (gz => ROS)
-    /joint_states  sensor_msgs/JointState <= wheel joints   (gz => ROS)
--->
-<sdf version="1.9" xmlns:xacro="http://www.ros.org/wiki/xacro">
+    <xacro:property name="caster_xoff" value="0.14"/>
 
-  <!-- ════════════════════════════════════════════════════════════════════════
-       Primary dimensions  (edit here; everything else is derived)
-       ════════════════════════════════════════════════════════════════════════ -->
-
-  <!-- Body: cube 5.5 in per side -->
-  <xacro:property name="body_size" value="0.1397"/>   <!-- m  (5.5 in) -->
-  <xacro:property name="body_mass" value="5.0"/>       <!-- kg -->
-
-  <!-- Drive wheels: 2.6 in diameter, 0.7 in wide -->
-  <xacro:property name="wheel_radius" value="0.0330"/> <!-- m  (1.3 in) -->
-  <xacro:property name="wheel_width"  value="0.0178"/> <!-- m  (0.7 in) -->
-  <xacro:property name="wheel_mass"   value="0.5"/>    <!-- kg -->
-
-  <!-- Caster: passive front sphere -->
-  <xacro:property name="caster_mass"  value="0.1"/>    <!-- kg -->
-
-  <!-- ── Derived geometry ──────────────────────────────────────────────────── -->
-  <xacro:property name="body_half"     value="${body_size   / 2}"/>
-  <xacro:property name="caster_radius" value="${wheel_radius / 2}"/>
-
-  <!-- wheel_y : lateral distance from base_link centre to wheel centre -->
-  <xacro:property name="wheel_y"   value="${body_half + wheel_width / 2}"/>
-  <!-- wheel_sep : centre-to-centre track width (used by DiffDrive plugin) -->
-  <xacro:property name="wheel_sep" value="${2 * wheel_y}"/>
-
-  <!-- body_z : height of base_link centre above ground when spawned -->
-  <!--          = wheel_radius + body_half                           -->
-  <xacro:property name="body_z"    value="${wheel_radius + body_half}"/>
-
-  <!-- wheel_z : z of wheel axle relative to base_link (= -body_half) -->
-  <xacro:property name="wheel_z"   value="${-body_half}"/>
-
-  <!-- caster_x : forward offset of caster centre from base_link -->
-  <xacro:property name="caster_x"  value="${body_half - caster_radius}"/>
-  <!-- caster_z : z of caster centre relative to base_link        -->
-  <xacro:property name="caster_z"  value="${caster_radius - body_z}"/>
-
-  <!-- ── Derived inertias ──────────────────────────────────────────────────── -->
-  <!-- Solid cube:     I = m * s² / 6                                          -->
-  <xacro:property name="body_ixx"
-      value="${body_mass * body_size**2 / 6}"/>
-
-  <!-- Solid cylinder: Ixx = Iyy = m*(3r²+h²)/12,  Izz = m*r²/2              -->
-  <xacro:property name="wheel_ixx"
-      value="${wheel_mass * (3 * wheel_radius**2 + wheel_width**2) / 12}"/>
-  <xacro:property name="wheel_izz"
-      value="${wheel_mass * wheel_radius**2 / 2}"/>
-
-  <!-- Solid sphere:   I = 2*m*r² / 5                                          -->
-  <xacro:property name="caster_ixx"
-      value="${2 * caster_mass * caster_radius**2 / 5}"/>
-
-  <!-- ════════════════════════════════════════════════════════════════════════
-       Wheel macro  —  one link + one revolute joint
-         prefix : "left" or "right"
-         y_pos  : signed lateral offset from base_link centre (m)
-                  pass ${wheel_y} for left, ${-wheel_y} for right
-       ════════════════════════════════════════════════════════════════════════ -->
-  <xacro:macro name="wheel" params="prefix y_pos">
-    <link name="wheel_${prefix}_link">
-      <pose relative_to="base_link">0 ${y_pos} ${wheel_z} 1.5708 0 0</pose>
+    <!-- Define some commonly used intertial properties  -->
+    <xacro:macro name="box_inertia" params="m w h d">
       <inertial>
-        <mass>${wheel_mass}</mass>
+        <pose>0 0 0 ${pi/2} 0 ${pi/2}</pose>
+        <mass>${m}</mass>
         <inertia>
-          <ixx>${wheel_ixx}</ixx><ixy>0</ixy><ixz>0</ixz>
-          <iyy>${wheel_ixx}</iyy><iyz>0</iyz>
-          <izz>${wheel_izz}</izz>
+          <ixx>${(m/12) * (h*h + d*d)}</ixx>
+          <ixy>0.0</ixy>
+          <ixz>0.0</ixz>
+          <iyy>${(m/12) * (w*w + d*d)}</iyy>
+          <iyz>0.0</iyz>
+          <izz>${(m/12) * (w*w + h*h)}</izz>
         </inertia>
       </inertial>
-      <visual name="visual">
-        <geometry>
-          <cylinder>
-            <radius>${wheel_radius}</radius>
-            <length>${wheel_width}</length>
-          </cylinder>
-        </geometry>
-        <material>
-          <ambient>0.1 0.1 0.1 1</ambient>
-          <diffuse>0.1 0.1 0.1 1</diffuse>
-        </material>
-      </visual>
-      <collision name="collision">
-        <geometry>
-          <cylinder>
-            <radius>${wheel_radius}</radius>
-            <length>${wheel_width}</length>
-          </cylinder>
-        </geometry>
-        <surface>
-          <friction><ode><mu>1.0</mu><mu2>1.0</mu2></ode></friction>
-        </surface>
-      </collision>
-    </link>
+    </xacro:macro>
 
-    <joint name="wheel_${prefix}_joint" type="revolute">
-      <parent>base_link</parent>
-      <child>wheel_${prefix}_link</child>
-      <axis>
-        <xyz expressed_in="__model__">0 1 0</xyz>
-        <limit><lower>-1e+16</lower><upper>1e+16</upper></limit>
-      </axis>
-    </joint>
-  </xacro:macro>
-
-  <!-- ════════════════════════════════════════════════════════════════════════
-       Model
-       ════════════════════════════════════════════════════════════════════════ -->
-  <model name="hermes">
-
-    <!-- ── base_link (cube body) ─────────────────────────────────────────── -->
-    <link name="base_link">
+    <xacro:macro name="cylinder_inertia" params="m r h">
       <inertial>
-        <mass>${body_mass}</mass>
+        <pose>0 0 0 ${pi/2} 0 0</pose>
+        <mass>${m}</mass>
         <inertia>
-          <ixx>${body_ixx}</ixx><ixy>0</ixy><ixz>0</ixz>
-          <iyy>${body_ixx}</iyy><iyz>0</iyz>
-          <izz>${body_ixx}</izz>
+          <ixx>${(m/12) * (3*r*r + h*h)}</ixx>
+          <ixy>0.0</ixy>
+          <ixz>0.0</ixz>
+          <iyy>${(m/12) * (3*r*r + h*h)}</iyy>
+          <iyz>0.0</iyz>
+          <izz>${(m/2) * (r*r)}</izz>
         </inertia>
       </inertial>
-      <visual name="visual">
+    </xacro:macro>
+
+
+    <xacro:macro name="sphere_inertia" params="m r">
+      <inertial>
+        <mass>${m}</mass>
+        <inertia>
+          <ixx>${(2/5) * m * (r*r)}</ixx>
+          <ixy>0.0</ixy>
+          <ixz>0.0</ixz>
+          <iyy>${(2/5) * m * (r*r)}</iyy>
+          <iyz>0.0</iyz>
+          <izz>${(2/5) * m * (r*r)}</izz>
+        </inertia>
+      </inertial>
+    </xacro:macro>
+
+    <!-- Robot Base -->
+    <link name='base_link'>
+      <must_be_base_link>true</must_be_base_link>
+      <visual name="base_link_visual">
         <geometry>
-          <box><size>${body_size} ${body_size} ${body_size}</size></box>
+          <box><size>
+            ${base_length} ${base_width} ${base_height}
+          </size></box>
         </geometry>
         <material>
-          <ambient>0.3 0.3 0.3 1</ambient>
-          <diffuse>0.3 0.3 0.3 1</diffuse>
+          <ambient>0 1 1 1</ambient>
+          <diffuse>0 1 1 1</diffuse>
         </material>
       </visual>
-      <collision name="collision">
+
+      <collision name="base_link_collision">
         <geometry>
-          <box><size>${body_size} ${body_size} ${body_size}</size></box>
+          <box><size>
+            ${base_length} ${base_width} ${base_height}
+          </size></box>
         </geometry>
-      </collision>
+      </collision> 
     </link>
 
-    <!-- ── base_footprint (virtual, at ground level) ─────────────────────── -->
-    <link name="base_footprint">
-      <pose relative_to="base_link">0 0 ${-body_z} 0 0 0</pose>
+    <!-- Robot Footprint -->
+    <link name='base_footprint'>
+      <pose relative_to="base_joint"/>
+      <xacro:box_inertia m="15" w="${base_width}" d="${base_length}" h="${base_height}"/>
     </link>
 
-    <joint name="base_footprint_joint" type="fixed">
+    <joint name='base_joint' type='fixed'>
       <parent>base_link</parent>
       <child>base_footprint</child>
+      <pose relative_to="base_link">0.0 0.0 ${-(wheel_radius+wheel_zoff)} 0 0 0</pose>
     </joint>
 
-    <!-- ── Drive wheels ──────────────────────────────────────────────────── -->
-    <xacro:wheel prefix="left"  y_pos="${wheel_y}"/>
-    <xacro:wheel prefix="right" y_pos="${-wheel_y}"/>
 
-    <!-- ── Caster wheel (front, passive, zero friction) ──────────────────── -->
-    <link name="caster_link">
-      <pose relative_to="base_link">${caster_x} 0 ${caster_z} 0 0 0</pose>
-      <inertial>
-        <mass>${caster_mass}</mass>
-        <inertia>
-          <ixx>${caster_ixx}</ixx><ixy>0</ixy><ixz>0</ixz>
-          <iyy>${caster_ixx}</iyy><iyz>0</iyz>
-          <izz>${caster_ixx}</izz>
-        </inertia>
-      </inertial>
-      <visual name="visual">
+    <!-- Wheels -->
+    <xacro:macro name="wheel" params="prefix x_reflect y_reflect">
+      <link name="${prefix}_link">
+        <pose relative_to="${prefix}_joint"/>
+
+        <visual name="${prefix}_link_visual">
+          <pose relative_to="${prefix}_link">0 0 0 ${pi/2} 0 0</pose>
+          <geometry>
+            <cylinder>
+              <radius>${wheel_radius}</radius>
+              <length>${wheel_width}</length>
+            </cylinder>
+          </geometry>
+          <material>
+            <ambient>0.3 0.3 0.3 1.0</ambient>
+            <diffuse>0.7 0.7 0.7 1.0</diffuse>
+          </material>
+        </visual>
+
+        <collision name="${prefix}_link_collision">
+          <pose relative_to="${prefix}_link">0 0 0 ${pi/2} 0 0</pose>
+          <geometry>
+            <cylinder>
+              <radius>${wheel_radius}</radius>
+              <length>${wheel_width}</length>
+            </cylinder>
+          </geometry>
+        </collision>
+
+        <xacro:cylinder_inertia m="0.5" r="${wheel_radius}" h="${wheel_width}"/>
+      </link>
+
+      <joint name="${prefix}_joint" type="revolute">
+        <parent>base_link</parent>
+        <child>${prefix}_link</child>
+        <pose relative_to="base_link">${x_reflect*wheel_xoff} ${y_reflect*(base_width/2+wheel_ygap)} ${-wheel_zoff} 0 0 0</pose>
+        <axis>
+          <xyz>0 1 0</xyz>
+          <limit>
+            <lower>-inf</lower>
+            <upper>inf</upper>
+          </limit>
+        </axis>
+      </joint>
+    </xacro:macro>
+
+    <xacro:wheel prefix="drivewhl_l" x_reflect="-1" y_reflect="1" />
+    <xacro:wheel prefix="drivewhl_r" x_reflect="-1" y_reflect="-1" />
+
+    <link name="front_caster">
+      <pose relative_to="caster_joint"/>
+
+      <visual name="front_caster_visual">
         <geometry>
-          <sphere><radius>${caster_radius}</radius></sphere>
+          <sphere>
+            <radius>${(wheel_radius+wheel_zoff-(base_height/2))}</radius>
+          </sphere>
         </geometry>
         <material>
-          <ambient>0.6 0.6 0.6 1</ambient>
-          <diffuse>0.6 0.6 0.6 1</diffuse>
+          <ambient>0 1 1 1</ambient>
+          <diffuse>0 1 1 1</diffuse>
         </material>
       </visual>
-      <collision name="collision">
+
+      <collision name="front_caster_collision">
         <geometry>
-          <sphere><radius>${caster_radius}</radius></sphere>
+          <sphere>
+            <radius>${(wheel_radius+wheel_zoff-(base_height/2))}</radius>
+          </sphere>
         </geometry>
-        <surface>
-          <friction><ode><mu>0.0</mu><mu2>0.0</mu2></ode></friction>
-        </surface>
+        <surface><friction><ode>
+          <mu>0.001</mu>
+          <mu2>0.001</mu2>
+        </ode></friction></surface>
       </collision>
+
+      <xacro:sphere_inertia m="0.5" r="${(wheel_radius+wheel_zoff-(base_height/2))}"/>
     </link>
 
     <joint name="caster_joint" type="fixed">
       <parent>base_link</parent>
-      <child>caster_link</child>
+      <child>front_caster</child>
+      <pose relative_to="base_link">${caster_xoff} 0.0 ${-(base_height/2)} 0 0 0</pose>
     </joint>
 
-    <!-- ── laser_frame (2-D LiDAR, top of body) ─────────────────────────── -->
-    <link name="laser_frame">
-      <pose relative_to="base_link">0 0 ${body_half} 0 0 0</pose>
-      <inertial>
-        <mass>0.1</mass>
-        <inertia>
-          <ixx>0.00001</ixx><ixy>0</ixy><ixz>0</ixz>
-          <iyy>0.00001</iyy><iyz>0</iyz>
-          <izz>0.00001</izz>
-        </inertia>
-      </inertial>
-      <visual name="visual">
+    <joint name='imu_joint' type='fixed'>
+      <parent>base_link</parent>
+      <child>imu_link</child>
+      <pose relative_to="base_link">0.0 0.0 0.01 0 0 0</pose>
+    </joint>
+
+    <link name='imu_link'>
+      <pose relative_to="imu_joint"/>
+      <visual name="imu_link_visual">
         <geometry>
-          <cylinder><radius>0.04</radius><length>0.04</length></cylinder>
+          <box><size>
+            0.1 0.1 0.1
+          </size></box>
         </geometry>
-        <material>
-          <ambient>0.0 0.4 0.8 1</ambient>
-          <diffuse>0.0 0.4 0.8 1</diffuse>
-        </material>
       </visual>
-      <collision name="collision">
+
+      <collision name="imu_link_collision">
         <geometry>
-          <cylinder><radius>0.04</radius><length>0.04</length></cylinder>
+          <box><size>
+            0.1 0.1 0.1
+          </size></box>
         </geometry>
       </collision>
-      <!-- 2-D LiDAR (360 deg, 10 Hz, 12 m range) -->
-      <sensor name="lidar" type="gpu_lidar">
-        <topic>/scan</topic>
-        <update_rate>10</update_rate>
+
+      <xacro:box_inertia m="0.1" w="0.1" d="0.1" h="0.1"/>
+
+      <sensor name="imu_sensor" type="imu">
         <always_on>true</always_on>
-        <visualize>false</visualize>
-        <lidar>
+        <update_rate>100</update_rate>
+        <visualize>true</visualize>
+        <topic>demo/imu</topic>
+        <gz_frame_id>imu_link</gz_frame_id>
+        <imu>
+          <angular_velocity>
+            <x>
+              <noise type="gaussian">
+                <mean>0.0</mean>
+                <stddev>2e-4</stddev>
+                <bias_mean>0.0000075</bias_mean>
+                <bias_stddev>0.0000008</bias_stddev>
+              </noise>
+            </x>
+            <y>
+              <noise type="gaussian">
+                <mean>0.0</mean>
+                <stddev>2e-4</stddev>
+                <bias_mean>0.0000075</bias_mean>
+                <bias_stddev>0.0000008</bias_stddev>
+              </noise>
+            </y>
+            <z>
+              <noise type="gaussian">
+                <mean>0.0</mean>
+                <stddev>2e-4</stddev>
+                <bias_mean>0.0000075</bias_mean>
+                <bias_stddev>0.0000008</bias_stddev>
+              </noise>
+            </z>
+          </angular_velocity>
+          <linear_acceleration>
+            <x>
+              <noise type="gaussian">
+                <mean>0.0</mean>
+                <stddev>1.7e-2</stddev>
+                <bias_mean>0.1</bias_mean>
+                <bias_stddev>0.001</bias_stddev>
+              </noise>
+            </x>
+            <y>
+              <noise type="gaussian">
+                <mean>0.0</mean>
+                <stddev>1.7e-2</stddev>
+                <bias_mean>0.1</bias_mean>
+                <bias_stddev>0.001</bias_stddev>
+              </noise>
+            </y>
+            <z>
+              <noise type="gaussian">
+                <mean>0.0</mean>
+                <stddev>1.7e-2</stddev>
+                <bias_mean>0.1</bias_mean>
+                <bias_stddev>0.001</bias_stddev>
+              </noise>
+            </z>
+          </linear_acceleration>
+        </imu>
+      </sensor>
+    </link>
+
+    <plugin filename="gz-sim-diff-drive-system" name="gz::sim::systems::DiffDrive">
+      <!-- wheels -->
+      <left_joint>drivewhl_l_joint</left_joint>
+      <right_joint>drivewhl_r_joint</right_joint>
+
+      <!-- kinematics -->
+      <wheel_separation>0.4</wheel_separation>
+      <wheel_radius>${wheel_radius}</wheel_radius>
+
+      <!-- limits -->
+      <max_linear_acceleration>0.1</max_linear_acceleration>
+
+      <!-- input -->
+      <topic>/demo/cmd_vel</topic>
+
+      <!-- output -->
+      <odom_topic>/demo/odom</odom_topic>
+      <tf_topic>/tf</tf_topic>
+
+      <frame_id>odom</frame_id>
+      <child_frame_id>base_link</child_frame_id>
+    </plugin>
+
+    <plugin
+      filename="gz-sim-joint-state-publisher-system"
+      name="gz::sim::systems::JointStatePublisher">
+      <topic>joint_states</topic>
+    </plugin>
+
+    <joint name="lidar_joint" type="fixed">
+      <parent>base_link</parent>
+      <child>lidar_link</child>
+      <pose relative_to="base_link">0.0 0.0 0.12 0 0 0</pose>
+    </joint>
+
+    <link name='lidar_link'>
+      <pose relative_to="lidar_joint"/>
+      <visual name="lidar_link_visual">
+        <geometry>
+          <cylinder>
+            <radius>0.0508</radius>
+            <length>0.055</length>
+          </cylinder>
+        </geometry>
+      </visual>
+
+      <collision name="lidar_link_collision">
+        <geometry>
+          <cylinder>
+            <radius>0.0508</radius>
+            <length>0.055</length>
+          </cylinder>
+        </geometry>
+      </collision>
+
+      <xacro:cylinder_inertia m="0.125" r="0.0508" h="0.055"/>
+
+      <sensor name="lidar" type="gpu_lidar">
+        <always_on>true</always_on>
+        <visualize>true</visualize>
+        <update_rate>5</update_rate>
+        <topic>scan</topic>
+        <gz_frame_id>lidar_link</gz_frame_id>
+        <ray>
           <scan>
             <horizontal>
               <samples>360</samples>
-              <resolution>1</resolution>
-              <min_angle>-3.14159265</min_angle>
-              <max_angle>3.14159265</max_angle>
+              <resolution>1.000000</resolution>
+              <min_angle>0.000000</min_angle>
+              <max_angle>6.280000</max_angle>
             </horizontal>
           </scan>
           <range>
-            <min>0.10</min>
-            <max>12.0</max>
-            <resolution>0.01</resolution>
+            <min>0.120000</min>
+            <max>3.5</max>
+            <resolution>0.015000</resolution>
           </range>
           <noise>
             <type>gaussian</type>
             <mean>0.0</mean>
             <stddev>0.01</stddev>
           </noise>
-        </lidar>
+        </ray>
       </sensor>
-    </link>
-
-    <joint name="laser_joint" type="fixed">
-      <parent>base_link</parent>
-      <child>laser_frame</child>
-    </joint>
-
-    <!-- ── camera_frame (front-top corner of body) ───────────────────────── -->
-    <link name="camera_frame">
-      <pose relative_to="base_link">${body_half} 0 ${body_half} 0 0 0</pose>
-      <inertial>
-        <mass>0.05</mass>
-        <inertia>
-          <ixx>0.00001</ixx><ixy>0</ixy><ixz>0</ixz>
-          <iyy>0.00001</iyy><iyz>0</iyz>
-          <izz>0.00001</izz>
-        </inertia>
-      </inertial>
-      <visual name="visual">
-        <geometry>
-          <box><size>0.03 0.03 0.03</size></box>
-        </geometry>
-        <material>
-          <ambient>0.8 0.1 0.1 1</ambient>
-          <diffuse>0.8 0.1 0.1 1</diffuse>
-        </material>
-      </visual>
     </link>
 
     <joint name="camera_joint" type="fixed">
       <parent>base_link</parent>
-      <child>camera_frame</child>
+      <child>camera_link</child>
+      <pose relative_to="base_link">0.215 0 0.05 0 0 0</pose>
     </joint>
 
-    <!-- ════════════════════════════════════════════════════════════════════
-         Gazebo Harmonic (gz-sim) plugins
-         ════════════════════════════════════════════════════════════════════ -->
+    <link name='camera_link'>
+      <pose relative_to="camera_joint"/>
+      <visual name="camera_link_visual">
+        <geometry>
+          <box><size>
+            0.015 0.130 0.0222
+          </size></box>
+        </geometry>
+      </visual>
 
-    <!-- Differential drive controller -->
-    <plugin filename="gz-sim-diff-drive-system"
-            name="gz::sim::systems::DiffDrive">
-      <left_joint>wheel_left_joint</left_joint>
-      <right_joint>wheel_right_joint</right_joint>
-      <wheel_separation>${wheel_sep}</wheel_separation>
-      <wheel_radius>${wheel_radius}</wheel_radius>
-      <odom_publish_frequency>20</odom_publish_frequency>
-      <topic>cmd_vel</topic>
-      <odom_topic>odom</odom_topic>
-      <tf_topic>tf</tf_topic>
-      <frame_id>odom</frame_id>
-      <child_frame_id>base_footprint</child_frame_id>
-      <min_velocity>-0.5</min_velocity>
-      <max_velocity>0.5</max_velocity>
-      <min_acceleration>-1.0</min_acceleration>
-      <max_acceleration>1.0</max_acceleration>
-    </plugin>
+      <collision name="camera_link_collision">
+        <geometry>
+          <box><size>
+            0.015 0.130 0.0222
+          </size></box>
+        </geometry>
+      </collision>
 
-    <!-- Joint state publisher for wheel joints -->
-    <plugin filename="gz-sim-joint-state-publisher-system"
-            name="gz::sim::systems::JointStatePublisher">
-      <topic>joint_states</topic>
-      <joint_name>wheel_left_joint</joint_name>
-      <joint_name>wheel_right_joint</joint_name>
-    </plugin>
+      <xacro:box_inertia m="0.035" w="0.015" d="0.130" h="0.0222"/>
 
+      <sensor name="depth_camera" type="rgbd_camera">
+        <always_on>true</always_on>
+        <visualize>true</visualize>
+        <update_rate>5.0</update_rate>
+        <topic>depth_camera</topic>
+        <gz_frame_id>camera_link</gz_frame_id>
+        <camera>
+          <horizontal_fov>1.047198</horizontal_fov>
+          <image>
+            <width>640</width>
+            <height>480</height>
+          </image>
+          <clip>
+            <near>0.05</near>
+            <far>3</far>
+          </clip>
+        </camera>
+        <baseline>0.2</baseline>
+        <pointCloudCutoff>0.5</pointCloudCutoff>
+        <pointCloudCutoffMax>3.0</pointCloudCutoffMax>
+        <distortionK1>0</distortionK1>
+        <distortionK2>0</distortionK2>
+        <distortionK3>0</distortionK3>
+        <distortionT1>0</distortionT1>
+        <distortionT2>0</distortionT2>
+        <CxPrime>0</CxPrime>
+        <Cx>0</Cx>
+        <Cy>0</Cy>
+        <focalLength>0</focalLength>
+        <hackBaseline>0</hackBaseline>
+      </sensor>
+    </link>
   </model>
 </sdf>
