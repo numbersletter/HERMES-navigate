@@ -41,7 +41,6 @@ SelectFrontierNode::SelectFrontierNode(
     rclcpp::ParameterValue(0.15));
   node->declare_parameter("select_frontier.min_frontier_score",
     rclcpp::ParameterValue(0.0));
-
   hysteresis_factor_  = node->get_parameter("select_frontier.hysteresis_factor").as_double();
   min_frontier_score_ = node->get_parameter("select_frontier.min_frontier_score").as_double();
 }

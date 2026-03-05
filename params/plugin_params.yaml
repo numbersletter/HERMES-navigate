@@ -54,4 +54,5 @@ hermes_navigate_node:
     # ── SelectFrontierNode parameters ─────────────────────────────────────────
     select_frontier:
       hysteresis_factor:   0.15   # Fraction above current score needed to switch goal
-      min_frontier_score: -1.0e9  # Minimum score to consider a frontier viable
+      min_frontier_score:  0.0    # Minimum composite score to consider a frontier viable
+                                  # (0.0 = accept any frontier with non-negative score)
