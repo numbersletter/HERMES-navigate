@@ -175,4 +175,17 @@ void AssignCostsNode::publishMarkers(const std::vector<ScoredFrontier> & scored)
   marker_pub_->publish(msg);
 }
 
+// ─── Factory registration ─────────────────────────────────────────────────────
+
+void AssignCostsNode::registerWithFactory(
+  BT::BehaviorTreeFactory & factory,
+  rclcpp_lifecycle::LifecycleNode::WeakPtr parent)
+{
+  factory.registerBuilder<AssignCostsNode>(
+    "AssignCosts",
+    [parent](const std::string & name, const BT::NodeConfig & config) {
+      return std::make_unique<AssignCostsNode>(name, config, parent);
+    });
+}
+
 }  // namespace hermes_navigate

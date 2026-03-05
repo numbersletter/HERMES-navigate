@@ -148,4 +148,17 @@ void NavigateToFrontierNode::onHalted()
   goal_handle_.reset();
 }
 
+// ─── Factory registration ─────────────────────────────────────────────────────
+
+void NavigateToFrontierNode::registerWithFactory(
+  BT::BehaviorTreeFactory & factory,
+  rclcpp_lifecycle::LifecycleNode::WeakPtr parent)
+{
+  factory.registerBuilder<NavigateToFrontierNode>(
+    "NavigateToFrontier",
+    [parent](const std::string & name, const BT::NodeConfig & config) {
+      return std::make_unique<NavigateToFrontierNode>(name, config, parent);
+    });
+}
+
 }  // namespace hermes_navigate

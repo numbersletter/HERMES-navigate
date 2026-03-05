@@ -105,4 +105,17 @@ BT::NodeStatus SelectFrontierNode::tick()
   return BT::NodeStatus::SUCCESS;
 }
 
+// ─── Factory registration ─────────────────────────────────────────────────────
+
+void SelectFrontierNode::registerWithFactory(
+  BT::BehaviorTreeFactory & factory,
+  rclcpp_lifecycle::LifecycleNode::WeakPtr parent)
+{
+  factory.registerBuilder<SelectFrontierNode>(
+    "SelectFrontier",
+    [parent](const std::string & name, const BT::NodeConfig & config) {
+      return std::make_unique<SelectFrontierNode>(name, config, parent);
+    });
+}
+
 }  // namespace hermes_navigate
