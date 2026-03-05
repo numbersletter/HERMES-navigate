@@ -195,44 +195,11 @@ void HermesNavigateNode::registerBTNodes()
   // ROS 2 parameters, create publishers, and load pluginlib plugins.
   rclcpp_lifecycle::LifecycleNode::WeakPtr self = shared_from_this();
 
-  // ── New structured BT nodes (plugin-aware) ────────────────────────────────
-  //
-  // SearchFrontiersNode  — comprising plugin: frontier_search.plugin
-  //   (default: hermes_navigate::WavefrontFrontierDetector)
-  factory_.registerBuilder<SearchFrontiersNode>(
-    "SearchFrontiers",
-    [self](const std::string & name, const BT::NodeConfig & config) {
-      return std::make_unique<SearchFrontiersNode>(name, config, self);
-    });
-
-  // AssignCostsNode  — comprising plugins: cost_plugins list
-  //   (default: InformationGainPlugin, EuclideanPlugin)
-  factory_.registerBuilder<AssignCostsNode>(
-    "AssignCosts",
-    [self](const std::string & name, const BT::NodeConfig & config) {
-      return std::make_unique<AssignCostsNode>(name, config, self);
-    });
-
-  // SelectFrontierNode
-  factory_.registerBuilder<SelectFrontierNode>(
-    "SelectFrontier",
-    [self](const std::string & name, const BT::NodeConfig & config) {
-      return std::make_unique<SelectFrontierNode>(name, config, self);
-    });
-
-  // ReturnToStartNode
-  factory_.registerBuilder<ReturnToStartNode>(
-    "ReturnToStart",
-    [self](const std::string & name, const BT::NodeConfig & config) {
-      return std::make_unique<ReturnToStartNode>(name, config, self);
-    });
-
-  // NavigateToFrontierNode — sends the selected frontier goal to Nav2
-  factory_.registerBuilder<NavigateToFrontierNode>(
-    "NavigateToFrontier",
-    [self](const std::string & name, const BT::NodeConfig & config) {
-      return std::make_unique<NavigateToFrontierNode>(name, config, self);
-    });
+  SearchFrontiersNode::registerWithFactory(factory_, self);
+  AssignCostsNode::registerWithFactory(factory_, self);
+  SelectFrontierNode::registerWithFactory(factory_, self);
+  ReturnToStartNode::registerWithFactory(factory_, self);
+  NavigateToFrontierNode::registerWithFactory(factory_, self);
 }
 
 // ─── loadBehaviorTree ─────────────────────────────────────────────────────────

@@ -138,4 +138,17 @@ void SearchFrontiersNode::publishMarkers(const std::vector<Frontier> & frontiers
   marker_pub_->publish(msg);
 }
 
+// ─── Factory registration ─────────────────────────────────────────────────────
+
+void SearchFrontiersNode::registerWithFactory(
+  BT::BehaviorTreeFactory & factory,
+  rclcpp_lifecycle::LifecycleNode::WeakPtr parent)
+{
+  factory.registerBuilder<SearchFrontiersNode>(
+    "SearchFrontiers",
+    [parent](const std::string & name, const BT::NodeConfig & config) {
+      return std::make_unique<SearchFrontiersNode>(name, config, parent);
+    });
+}
+
 }  // namespace hermes_navigate

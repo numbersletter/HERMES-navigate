@@ -19,6 +19,7 @@
 #include <string>
 
 #include "behaviortree_cpp/action_node.h"
+#include "behaviortree_cpp/bt_factory.h"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav2_msgs/action/navigate_to_pose.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
@@ -54,6 +55,11 @@ public:
     rclcpp_lifecycle::LifecycleNode::WeakPtr parent);
 
   static BT::PortsList providedPorts();
+
+  /// @brief Register this node type with the BT factory.
+  static void registerWithFactory(
+    BT::BehaviorTreeFactory & factory,
+    rclcpp_lifecycle::LifecycleNode::WeakPtr parent);
 
   BT::NodeStatus onStart() override;
   BT::NodeStatus onRunning() override;
