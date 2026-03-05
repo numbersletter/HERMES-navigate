@@ -73,24 +73,16 @@ pluginlib_export_plugin_description_file(
 
 # ──────────────────────────────────────────────────────────────────────────────
 # hermes_navigate_bt_plugins — BT node shared library
-#   Loaded by Nav2 BT Navigator (legacy) and by HermesNavigateNode (new).
-#   Single BT_REGISTER_NODES in src/bt_plugins/register_nodes.cpp.
+#   Loaded at runtime by HermesNavigateNode.
+#   Each node registers itself via its static registerWithFactory() method.
 # ──────────────────────────────────────────────────────────────────────────────
 add_library(hermes_navigate_bt_plugins SHARED
-  # Legacy BT nodes (backward compat with explore_and_cover.xml)
-  src/compute_frontiers.cpp
-  src/score_frontiers.cpp
-  src/select_next_frontier.cpp
-  src/should_do_coverage.cpp
-  src/select_coverage_waypoint.cpp
-  # New structured BT nodes
+  # BT nodes
   src/bt_plugins/search_frontiers_node.cpp
   src/bt_plugins/assign_costs_node.cpp
   src/bt_plugins/select_frontier_node.cpp
   src/bt_plugins/return_to_start_node.cpp
   src/bt_plugins/navigate_to_frontier_node.cpp
-  # Central BT_REGISTER_NODES (must be exactly one per .so)
-  src/bt_plugins/register_nodes.cpp
 )
 target_include_directories(hermes_navigate_bt_plugins PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -98,9 +90,6 @@ target_include_directories(hermes_navigate_bt_plugins PUBLIC
 )
 ament_target_dependencies(hermes_navigate_bt_plugins ${COMMON_DEPS})
 target_link_libraries(hermes_navigate_bt_plugins hermes_navigate_plugins)
-# Register BT nodes so Nav2 BT Navigator can discover the legacy nodes
-pluginlib_export_plugin_description_file(
-  nav2_behavior_tree plugins/hermes_navigate_bt_plugins.xml)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # hermes_navigate_node — main lifecycle node executable
