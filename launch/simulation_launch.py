@@ -28,8 +28,7 @@ What is started
   5. slam_toolbox           — online async SLAM (map → odom TF + /map)
   6. Nav2 full stack        — planner / controller / BT navigator
   7. hermes_navigate_node   — lifecycle frontier-exploration BT controller
-  8. coverage_tracker_node  — lifecycle camera-coverage tracker
-  9. lifecycle_manager      — auto-configures and activates hermes_navigate_node and coverage_tracker_node
+  8. lifecycle_manager      — auto-configures and activates hermes_navigate_node
 
 All nodes run with use_sim_time=true so they synchronise on /clock.
 
@@ -218,27 +217,9 @@ def generate_launch_description():
         ],
     )
 
-    # ── 8. Coverage Tracker Node (lifecycle) ──────────────────────────────────
-    coverage_tracker = LifecycleNode(
-        package="hermes_navigate",
-        executable="coverage_tracker_node",
-        name="coverage_tracker_node",
-        namespace="",
-        output="screen",
-        parameters=[{
-            "camera_fov_deg":     60.0,
-            "camera_max_range_m": 5.0,
-            "update_rate_hz":     10.0,
-            "base_frame":         "base_link",
-            "map_frame":          "map",
-            "camera_yaw_offset":  0.0,
-            "use_sim_time":       True,
-        }],
-    )
-
-    # ── 9. Lifecycle Manager ───────────────────────────────────────────────────
-    #   Automatically configures and activates hermes_navigate_node and
-    #   coverage_tracker_node after the navigation stack is ready.
+    # ── 8. Lifecycle Manager ───────────────────────────────────────────────────
+    #   Automatically configures and activates hermes_navigate_node after the
+    #   navigation stack is ready.
     lifecycle_manager = Node(
         package="nav2_lifecycle_manager",
         executable="lifecycle_manager",
@@ -249,7 +230,6 @@ def generate_launch_description():
             "autostart":    True,
             "node_names": [
                 "hermes_navigate_node",
-                "coverage_tracker_node",
             ],
         }],
     )
@@ -272,7 +252,6 @@ def generate_launch_description():
         slam_toolbox,
         nav2_bringup,
         hermes_navigate,
-        coverage_tracker,
         lifecycle_manager,
 
         LogInfo(msg="HERMES simulation ready — all nodes launched."),
