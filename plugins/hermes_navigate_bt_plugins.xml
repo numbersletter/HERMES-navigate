@@ -1,27 +1,45 @@
 <library path="hermes_navigate_bt_plugins">
 
+  <!-- ── New structured BT nodes (used by hermes_exploration_bt.xml) ─────── -->
+  <!--
+    SearchFrontiersNode, AssignCostsNode, SelectFrontierNode, and
+    ReturnToStartNode require a lifecycle-node context and are registered
+    programmatically by HermesNavigateNode::registerBTNodes() at runtime.
+    They are listed here for documentation purposes only.
+
+    SearchFrontiersNode  — comprising plugin: frontier_search.plugin
+      (default: hermes_navigate::WavefrontFrontierDetector)
+    AssignCostsNode      — comprising plugins: cost_plugins list
+      (default: InformationGainPlugin, EuclideanPlugin)
+  -->
+
+  <!-- ── Legacy BT nodes (used by explore_and_cover.xml) ─────────────────── -->
+
   <class type="hermes_navigate::ComputeFrontiers"
          base_class_type="BT::TreeNode">
     <description>
-      BFS-based frontier detection on the Nav2 global costmap.
+      [Legacy] BFS-based frontier detection on the Nav2 global costmap.
       Outputs a list of clustered frontier candidates on the blackboard.
+      Superseded by SearchFrontiersNode + WavefrontFrontierDetector plugin.
     </description>
   </class>
 
   <class type="hermes_navigate::ScoreFrontiers"
          base_class_type="BT::TreeNode">
     <description>
-      Scores each frontier using: score = alpha * info_gain - beta * traversal_cost.
+      [Legacy] Scores each frontier using: score = alpha * info_gain - beta * cost.
       Uses A* on the costmap for traversal cost and unknown-cell counting for
       information gain.
+      Superseded by AssignCostsNode + InformationGainPlugin + EuclideanPlugin.
     </description>
   </class>
 
   <class type="hermes_navigate::SelectNextFrontier"
          base_class_type="BT::TreeNode">
     <description>
-      Orders scored frontiers with a greedy nearest-neighbour heuristic and
-      applies hysteresis before emitting the next NavigateToPose goal.
+      [Legacy] Orders scored frontiers with a greedy nearest-neighbour heuristic
+      and applies hysteresis before emitting the next NavigateToPose goal.
+      Superseded by SelectFrontierNode.
     </description>
   </class>
 

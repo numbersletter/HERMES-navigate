@@ -1,0 +1,103 @@
+<?xml version="1.0"?>
+<!--
+  HERMES Exploration Behavior Tree
+  =================================
+  Entry point: loaded by HermesNavigateNode on on_configure().
+
+  Lifecycle behaviour:
+    CONFIGURED  → Tree is loaded but NOT ticked. Robot is stationary.
+    ACTIVE      → Tick timer starts. Exploration branch runs.
+    DEACTIVATING→ HermesNavigateNode sets return_to_start=true on the
+                  blackboard. The ReactiveFallback re-evaluates and the
+                  ReturnToStart branch takes over.
+
+  Tree structure (top-level ReactiveFallback):
+  ┌─ ReactiveFallback
+  │   ├─ [Return branch]  Sequence
+  │   │     BlackboardCheckBool(return_to_start == true)
+  │   │     ReturnToStart(start_pose)           ← blocks until home
+  │   │
+  │   └─ [Exploration branch]  PipelineSequence
+  │         ├─ RateController(1 Hz)
+  │         │     Sequence
+  │         │       SearchFrontiers   ← WavefrontFrontierDetector plugin
+  │         │       AssignCosts       ← InformationGainPlugin + EuclideanPlugin
+  │         │       SelectFrontier    ← hysteresis-based goal selection
+  │         └─ ReactiveFallback
+  │               NavigateToPose     ← sends goal to Nav2
+
+  Blackboard entries (written by HermesNavigateNode before the first tick):
+    start_pose       (geometry_msgs/PoseStamped) — captured at configure
+    return_to_start  (bool)                      — true when deactivating
+    exploration_done (bool)                      — set by SelectFrontier
+    robot_pose       (geometry_msgs/PoseStamped) — updated every tick
+-->
+<root BTCPP_format="4" main_tree_to_execute="HermesExplorationBT">
+
+  <BehaviorTree ID="HermesExplorationBT">
+    <ReactiveFallback>
+
+      <!-- ─── Return-to-Start branch ──────────────────────────────────────── -->
+      <!--
+        When HermesNavigateNode sets return_to_start=true (on_deactivate),
+        this branch succeeds: the robot navigates home and the tree finishes.
+      -->
+      <Sequence>
+        <BlackboardCheckBool
+          value_A="{return_to_start}"
+          value_B="true"
+          return_on_mismatch="FAILURE"/>
+        <ReturnToStart start_pose="{start_pose}"/>
+      </Sequence>
+
+      <!-- ─── Exploration branch ──────────────────────────────────────────── -->
+      <!--
+        PipelineSequence: children are ticked left-to-right.  If a child
+        returns RUNNING the pipeline keeps ticking it while re-ticking
+        already-succeeded children from the left.  This lets the robot keep
+        navigating (right child RUNNING) while the search re-runs (left child).
+      -->
+      <PipelineSequence>
+
+        <!-- Rate-limited frontier search + scoring ─────────────────────── -->
+        <RateController hz="1.0">
+          <Sequence>
+
+            <!-- 1. Search for frontier clusters (incremental wavefront BFS) -->
+            <SearchFrontiers
+              robot_pose="{robot_pose}"
+              frontiers="{frontiers}"/>
+
+            <!-- 2. Score each frontier using InformationGain + Euclidean -->
+            <AssignCosts
+              frontiers="{frontiers}"
+              robot_pose="{robot_pose}"
+              scored_frontiers="{scored_frontiers}"/>
+
+            <!-- 3. Select best frontier as nav goal (with hysteresis) -->
+            <SelectFrontier
+              scored_frontiers="{scored_frontiers}"
+              robot_pose="{robot_pose}"
+              goal="{nav_goal}"
+              exploration_done="{exploration_done}"/>
+
+          </Sequence>
+        </RateController>
+
+        <!-- Navigation to selected frontier ────────────────────────────── -->
+        <!--
+          ReactiveFallback: NavigateToFrontier keeps returning RUNNING while
+          the robot is moving.  If it fails (obstacle, timeout, goal changed)
+          the fallback succeeds so the pipeline can update the goal on the
+          next tick.
+        -->
+        <ReactiveFallback>
+          <NavigateToFrontier goal="{nav_goal}"/>
+        </ReactiveFallback>
+
+      </PipelineSequence>
+
+    </ReactiveFallback>
+  </BehaviorTree>
+
+</root>
