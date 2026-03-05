@@ -18,13 +18,14 @@
   │   │     ReturnToStart(start_pose)           ← blocks until home
   │   │
   │   └─ [Exploration branch]  PipelineSequence
-  │         ├─ RateController(1 Hz)
+  │         ├─ [Rate-controlled] RateController(1 Hz)
   │         │     Sequence
   │         │       SearchFrontiers   ← WavefrontFrontierDetector plugin
   │         │       AssignCosts       ← InformationGainPlugin + EuclideanPlugin
   │         │       SelectFrontier    ← hysteresis-based goal selection
-  │         └─ ReactiveFallback
-  │               NavigateToPose     ← sends goal to Nav2
+  │         └─ [Outside rate control] Fallback
+  │               RetryUntilSuccessful(num_attempts=3)
+  │                 NavigateToPose   ← sends goal to Nav2, retries up to 3×
 
   Blackboard entries (written by HermesNavigateNode before the first tick):
     start_pose       (geometry_msgs/PoseStamped) — captured at configure
@@ -86,14 +87,17 @@
 
         <!-- Navigation to selected frontier ────────────────────────────── -->
         <!--
-          ReactiveFallback: NavigateToFrontier keeps returning RUNNING while
-          the robot is moving.  If it fails (obstacle, timeout, goal changed)
-          the fallback succeeds so the pipeline can update the goal on the
-          next tick.
+          Fallback wrapping RetryUntilSuccessful: NavigateToFrontier is
+          retried up to 3 times on failure (obstacle, timeout, etc.).
+          If all 3 attempts fail the Fallback succeeds, allowing the
+          pipeline to re-run the rate-controlled search on the next tick
+          and pick a new goal.
         -->
-        <ReactiveFallback>
-          <NavigateToFrontier goal="{nav_goal}"/>
-        </ReactiveFallback>
+        <Fallback>
+          <RetryUntilSuccessful num_attempts="3">
+            <NavigateToFrontier goal="{nav_goal}"/>
+          </RetryUntilSuccessful>
+        </Fallback>
 
       </PipelineSequence>
 
