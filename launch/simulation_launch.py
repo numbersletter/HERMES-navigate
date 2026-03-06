@@ -157,6 +157,8 @@ def generate_launch_description():
     #   Pass the already-processed SDF string directly via -string so no
     #   separate plain-SDF file needs to exist on disk.
     #   body_z_spawn = wheel_radius + body_size/2 = 0.033 + 0.0699 = 0.1029 m
+    #   Spawned on the left (west) side of the room, x = -0.40, clear of the
+    #   central divider wall which sits at x = 0.
     spawn_robot = Node(
         package="ros_gz_sim",
         executable="create",
@@ -164,7 +166,7 @@ def generate_launch_description():
         arguments=[
             "-name",   "hermes",
             "-string", robot_description_content,
-            "-x",      "0.0",
+            "-x",      "-0.40",
             "-y",      "0.0",
             "-z",      "0.1029",
             "-Y",      "0.0",
