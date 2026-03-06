@@ -22,6 +22,7 @@
 #include "ament_index_cpp/get_package_share_directory.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
+#include "hermes_navigate/bt_plugins/blackboard_check_bool_node.hpp"
 #include "hermes_navigate/bt_plugins/search_frontiers_node.hpp"
 #include "hermes_navigate/bt_plugins/assign_costs_node.hpp"
 #include "hermes_navigate/bt_plugins/select_frontier_node.hpp"
@@ -195,6 +196,7 @@ void HermesNavigateNode::registerBTNodes()
   // ROS 2 parameters, create publishers, and load pluginlib plugins.
   rclcpp_lifecycle::LifecycleNode::WeakPtr self = shared_from_this();
 
+  BlackboardCheckBool::registerWithFactory(factory_);
   SearchFrontiersNode::registerWithFactory(factory_, self);
   AssignCostsNode::registerWithFactory(factory_, self);
   SelectFrontierNode::registerWithFactory(factory_, self);
