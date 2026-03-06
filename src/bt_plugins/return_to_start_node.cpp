@@ -15,8 +15,11 @@
 #include "hermes_navigate/bt_plugins/return_to_start_node.hpp"
 
 #include <chrono>
+#include <fstream>
+#include <sstream>
 #include <string>
 
+#include "ament_index_cpp/get_package_share_directory.hpp"
 #include "rclcpp/rclcpp.hpp"
 
 namespace hermes_navigate
@@ -38,6 +41,20 @@ ReturnToStartNode::ReturnToStartNode(
 
   action_client_ = rclcpp_action::create_client<NavigateToPose>(
     node, "navigate_to_pose");
+
+  // Load navigate_with_replanning.xml so it can be passed as the behavior_tree
+  // field in every NavigateToPose goal we send.
+  const std::string xml_path =
+    ament_index_cpp::get_package_share_directory("hermes_navigate") +
+    "/behavior_trees/navigate_with_replanning.xml";
+  std::ifstream xml_file(xml_path);
+  if (!xml_file.is_open()) {
+    throw std::runtime_error(
+      "ReturnToStartNode: could not open '" + xml_path + "'.");
+  }
+  std::ostringstream ss;
+  ss << xml_file.rdbuf();
+  navigate_bt_xml_ = ss.str();
 }
 
 // ─── BT ports ─────────────────────────────────────────────────────────────────
@@ -72,7 +89,7 @@ BT::NodeStatus ReturnToStartNode::onStart()
 
   NavigateToPose::Goal goal_msg;
   goal_msg.pose = start_pose_res.value();
-  goal_msg.behavior_tree = "";
+  goal_msg.behavior_tree = navigate_bt_xml_;
 
   auto send_goal_options = rclcpp_action::Client<NavigateToPose>::SendGoalOptions();
 

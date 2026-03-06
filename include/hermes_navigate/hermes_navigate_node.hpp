@@ -78,11 +78,6 @@ private:
   BT::Tree tree_;
   BT::Blackboard::Ptr blackboard_;
 
-  /// @brief Register all BT node types with the factory.
-  ///        Each registration captures a weak_ptr to this node so that
-  ///        BT nodes can access ROS 2 parameters and create publishers.
-  void registerBTNodes();
-
   /// @brief Load and build the BT tree from the configured XML file.
   bool loadBehaviorTree(const std::string & bt_xml_path);
 
