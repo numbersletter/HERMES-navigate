@@ -15,66 +15,45 @@
 #ifndef HERMES_NAVIGATE__BT_PLUGINS__RETURN_TO_START_NODE_HPP_
 #define HERMES_NAVIGATE__BT_PLUGINS__RETURN_TO_START_NODE_HPP_
 
-#include <memory>
 #include <string>
 
 #include "behaviortree_cpp/action_node.h"
 #include "behaviortree_cpp/bt_factory.h"
 #include "geometry_msgs/msg/pose_stamped.hpp"
-#include "nav2_msgs/action/navigate_to_pose.hpp"
-#include "rclcpp_action/rclcpp_action.hpp"
-#include "rclcpp_lifecycle/lifecycle_node.hpp"
 
 namespace hermes_navigate
 {
 
 /**
  * @class ReturnToStartNode
- * @brief BT action node that sends the robot back to its starting pose via
- *        the Nav2 NavigateToPose action server.
+ * @brief BT action node that copies the robot's start pose onto the shared
+ *        blackboard as the current navigation goal.
  *
- * The starting pose is read from the "start_pose" blackboard entry (set by
- * HermesNavigateNode on configure).
- *
- * The node returns RUNNING while navigation is in progress, SUCCESS when the
- * robot reaches the start pose, and FAILURE if the action server rejects the
- * goal or navigation fails.
+ * The node does NOT send any navigation request itself; it simply writes
+ * "start_pose" to the "goal" output port (mapped to the same "{nav_goal}"
+ * blackboard key read by NavigateToFrontierNode). NavigateToFrontierNode then
+ * handles the actual navigation via the Nav2 NavigateToPose action server.
  *
  * BT ports:
- *   Input: "start_pose"  — geometry_msgs::msg::PoseStamped
+ *   Input:  "start_pose" — geometry_msgs::msg::PoseStamped
+ *   Output: "goal"       — geometry_msgs::msg::PoseStamped
  */
-class ReturnToStartNode : public BT::StatefulActionNode
+class ReturnToStartNode : public BT::SyncActionNode
 {
 public:
-  using NavigateToPose = nav2_msgs::action::NavigateToPose;
-  using GoalHandle = rclcpp_action::ClientGoalHandle<NavigateToPose>;
-
   ReturnToStartNode(
     const std::string & name,
-    const BT::NodeConfig & config,
-    rclcpp_lifecycle::LifecycleNode::WeakPtr parent);
+    const BT::NodeConfig & config);
 
   static BT::PortsList providedPorts();
 
   /// @brief Register this node type with the BT factory.
-  static void registerWithFactory(
-    BT::BehaviorTreeFactory & factory,
-    rclcpp_lifecycle::LifecycleNode::WeakPtr parent);
+  static void registerWithFactory(BT::BehaviorTreeFactory & factory);
 
-  BT::NodeStatus onStart() override;
-  BT::NodeStatus onRunning() override;
-  void onHalted() override;
-
-private:
-  rclcpp_lifecycle::LifecycleNode::WeakPtr parent_;
-  rclcpp_action::Client<NavigateToPose>::SharedPtr action_client_;
-  GoalHandle::SharedPtr goal_handle_;
-  std::string navigate_bt_xml_;
-
-  enum class State { IDLE, PENDING, RUNNING, DONE_SUCCESS, DONE_FAILURE };
-  State state_{State::IDLE};
+  BT::NodeStatus tick() override;
 };
 
 }  // namespace hermes_navigate
 
 #endif  // HERMES_NAVIGATE__BT_PLUGINS__RETURN_TO_START_NODE_HPP_
+
