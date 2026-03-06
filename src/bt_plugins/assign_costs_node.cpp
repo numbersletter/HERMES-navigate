@@ -71,8 +71,15 @@ AssignCostsNode::AssignCostsNode(
   }
 
   // ── Costmap subscription ──────────────────────────────────────────────────
+  // Re-use the same topic parameter as SearchFrontiersNode (declared by
+  // HermesNavigateNode); fall back to the default if not yet declared.
+  const std::string costmap_topic =
+    node->has_parameter("global_costmap_topic")
+    ? node->get_parameter("global_costmap_topic").as_string()
+    : std::string("/global_costmap/costmap_raw");
+
   costmap_sub_ = node->create_subscription<nav2_msgs::msg::Costmap>(
-    "/global_costmap/costmap_raw",
+    costmap_topic,
     rclcpp::QoS(1).transient_local(),
     [this](nav2_msgs::msg::Costmap::SharedPtr msg) {
       latest_costmap_ = msg;
@@ -112,7 +119,8 @@ BT::NodeStatus AssignCostsNode::tick()
   if (!latest_costmap_) {
     auto node = parent_.lock();
     if (node) {
-      RCLCPP_WARN(node->get_logger(), "AssignCostsNode: waiting for costmap.");
+      RCLCPP_WARN_THROTTLE(node->get_logger(), *node->get_clock(), 5000,
+        "AssignCostsNode: waiting for costmap.");
     }
     return BT::NodeStatus::FAILURE;
   }

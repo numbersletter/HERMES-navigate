@@ -53,8 +53,18 @@ SearchFrontiersNode::SearchFrontiersNode(
   frontier_plugin_->initialize(parent_, "wavefront_frontier_detector");
 
   // ── Costmap subscription ──────────────────────────────────────────────────
+  // The topic is declared by HermesNavigateNode; fall back to the default if
+  // for some reason it is not yet declared (e.g., standalone test usage).
+  const std::string costmap_topic =
+    node->has_parameter("global_costmap_topic")
+    ? node->get_parameter("global_costmap_topic").as_string()
+    : std::string("/global_costmap/costmap_raw");
+
+  RCLCPP_INFO(node->get_logger(),
+    "SearchFrontiersNode: subscribing to costmap topic '%s'.", costmap_topic.c_str());
+
   costmap_sub_ = node->create_subscription<nav2_msgs::msg::Costmap>(
-    "/global_costmap/costmap_raw",
+    costmap_topic,
     rclcpp::QoS(1).transient_local(),
     [this](nav2_msgs::msg::Costmap::SharedPtr msg) {
       latest_costmap_ = msg;
@@ -82,7 +92,7 @@ BT::NodeStatus SearchFrontiersNode::tick()
   if (!latest_costmap_) {
     auto node = parent_.lock();
     if (node) {
-      RCLCPP_WARN(node->get_logger(),
+      RCLCPP_WARN_THROTTLE(node->get_logger(), *node->get_clock(), 5000,
         "SearchFrontiersNode: waiting for global costmap.");
     }
     return BT::NodeStatus::RUNNING;

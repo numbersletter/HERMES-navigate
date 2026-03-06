@@ -40,11 +40,12 @@ HermesNavigateNode::HermesNavigateNode(const rclcpp::NodeOptions & options)
   // Declare parameters with defaults; values are read in on_configure so that
   // they can be overridden by the launch file or a YAML params file before the
   // node is configured.
-  declare_parameter("bt_xml_file",      std::string(""));
-  declare_parameter("bt_tick_rate_hz",  10.0);
-  declare_parameter("base_frame",       std::string("base_link"));
-  declare_parameter("map_frame",        std::string("map"));
-  declare_parameter("robot_pose_topic", std::string("/robot_pose"));
+  declare_parameter("bt_xml_file",          std::string(""));
+  declare_parameter("bt_tick_rate_hz",      10.0);
+  declare_parameter("base_frame",           std::string("base_link"));
+  declare_parameter("map_frame",            std::string("map"));
+  declare_parameter("robot_pose_topic",     std::string("/robot_pose"));
+  declare_parameter("global_costmap_topic", std::string("/global_costmap/costmap_raw"));
 }
 
 // ─── on_configure ─────────────────────────────────────────────────────────────
