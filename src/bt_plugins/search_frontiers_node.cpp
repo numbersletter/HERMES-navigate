@@ -31,7 +31,7 @@ SearchFrontiersNode::SearchFrontiersNode(
   const std::string & name,
   const BT::NodeConfig & config,
   rclcpp_lifecycle::LifecycleNode::WeakPtr parent)
-: BT::SyncActionNode(name, config),
+: BT::ActionNodeBase(name, config),
   parent_(parent),
   plugin_loader_("hermes_navigate", "hermes_navigate::BaseFrontierSearch")
 {
@@ -85,7 +85,7 @@ BT::NodeStatus SearchFrontiersNode::tick()
       RCLCPP_WARN(node->get_logger(),
         "SearchFrontiersNode: waiting for global costmap.");
     }
-    return BT::NodeStatus::FAILURE;
+    return BT::NodeStatus::RUNNING;
   }
 
   // Get robot pose (optional — plugin has fallback behaviour)
