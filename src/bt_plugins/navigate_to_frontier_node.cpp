@@ -15,8 +15,6 @@
 #include "hermes_navigate/bt_plugins/navigate_to_frontier_node.hpp"
 
 #include <chrono>
-#include <fstream>
-#include <sstream>
 #include <string>
 
 #include "ament_index_cpp/get_package_share_directory.hpp"
@@ -42,19 +40,12 @@ NavigateToFrontierNode::NavigateToFrontierNode(
   action_client_ = rclcpp_action::create_client<NavigateToPose>(
     node, "navigate_to_pose");
 
-  // Load navigate_with_replanning.xml so it can be passed as the behavior_tree
-  // field in every NavigateToPose goal we send.
-  const std::string xml_path =
+  // Resolve the path to navigate_with_replanning.xml once at construction time.
+  // Nav2's bt_navigator accepts a file path in the behavior_tree goal field and
+  // loads the BT XML itself.
+  navigate_bt_path_ =
     ament_index_cpp::get_package_share_directory("hermes_navigate") +
     "/behavior_trees/navigate_with_replanning.xml";
-  std::ifstream xml_file(xml_path);
-  if (!xml_file.is_open()) {
-    throw std::runtime_error(
-      "NavigateToFrontierNode: could not open '" + xml_path + "'.");
-  }
-  std::ostringstream ss;
-  ss << xml_file.rdbuf();
-  navigate_bt_xml_ = ss.str();
 }
 
 // ─── BT ports ─────────────────────────────────────────────────────────────────
@@ -91,7 +82,7 @@ BT::NodeStatus NavigateToFrontierNode::onStart()
 
   NavigateToPose::Goal goal_msg;
   goal_msg.pose = goal_pose;
-  goal_msg.behavior_tree = navigate_bt_xml_;
+  goal_msg.behavior_tree = navigate_bt_path_;
 
   auto send_goal_options = rclcpp_action::Client<NavigateToPose>::SendGoalOptions();
 
