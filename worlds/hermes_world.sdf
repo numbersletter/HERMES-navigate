@@ -5,20 +5,26 @@
   A simple indoor test environment for HERMES simulation.
 
   Layout: walled square room (4 ft × 4 ft = 1.22 m × 1.22 m)
-          with 7.5 in (0.191 m) tall outer walls, four interior
-          obstacles and a partial divider wall, giving the
-          frontier-exploration algorithm non-trivial geometry to
-          map and navigate around.
+          with 7.5 in (0.191 m) tall outer walls and a single
+          central divider wall that runs from the south wall to
+          the mid-point of the room, giving the frontier-exploration
+          algorithm a non-trivial geometry to map and navigate around.
 
   Key dimensions
   ==============
-    Room inner:    1.22 x 1.22 m  (4 ft x 4 ft)
+    Room inner:     1.22 x 1.22 m  (4 ft x 4 ft)
     Wall thickness: 0.05 m  (~2 in)
     Wall height:    0.191 m  (7.5 in)
     Room half:      0.610 m  (inner edge to centre)
     Wall centre y/x: +/-0.635 m  (room_half + wall_thickness/2)
 
-  The robot spawns near the origin (0, 0), facing +x.
+  Central divider wall
+  ====================
+    Attached to south inner wall (y = -0.610) and extends north to
+    the room mid-line (y = 0.0).  Length 0.610 m, centred at y = -0.305.
+    Leaves the entire north half of the room open.
+
+  The robot spawns on the left (west) side at x = -0.40, y = 0.0.
 
   Requires Gazebo Harmonic (gz-sim ≥ 7).
 -->
@@ -168,83 +174,26 @@
     </model>
 
     <!-- ══════════════════════════════════════════════════════════════════════
-         Interior obstacles — give the frontier explorer real geometry.
-         Obstacle height = 0.191 m (same as walls); centres at z=0.0955 m.
-         Tops at 0.191 m and LiDAR scan plane at ~0.173 m AGL ensures
-         the scan beam intersects every obstacle.
+         Central divider wall — runs from the south inner wall (y = -0.610)
+         north to the room mid-line (y = 0.0).
+           length : 0.610 m  (half the room depth)
+           centre : x = 0.0, y = -0.305  (midpoint of that span)
+           thickness : 0.05 m  (same as outer walls)
+           height    : 0.191 m (same as outer walls)
+         Leaves the full north half of the room open.
          ══════════════════════════════════════════════════════════════════ -->
 
-    <!-- Column obstacle NE quadrant -->
-    <model name="obstacle_1">
+    <!-- Central divider (south → mid, attached to south outer wall) -->
+    <model name="divider_centre">
       <static>true</static>
-      <pose>0.25 0.20 0.0955 0 0 0</pose>
+      <pose>0 -0.305 0.0955 0 0 0</pose>
       <link name="link">
         <collision name="collision">
-          <geometry><box><size>0.05 0.05 0.191</size></box></geometry>
+          <geometry><box><size>0.05 0.610 0.191</size></box></geometry>
         </collision>
         <visual name="visual">
-          <geometry><box><size>0.05 0.05 0.191</size></box></geometry>
-          <material><ambient>0.6 0.4 0.2 1</ambient><diffuse>0.6 0.4 0.2 1</diffuse></material>
-        </visual>
-      </link>
-    </model>
-
-    <!-- Column obstacle SW quadrant -->
-    <model name="obstacle_2">
-      <static>true</static>
-      <pose>-0.25 -0.20 0.0955 0 0 0</pose>
-      <link name="link">
-        <collision name="collision">
-          <geometry><box><size>0.05 0.05 0.191</size></box></geometry>
-        </collision>
-        <visual name="visual">
-          <geometry><box><size>0.05 0.05 0.191</size></box></geometry>
-          <material><ambient>0.6 0.4 0.2 1</ambient><diffuse>0.6 0.4 0.2 1</diffuse></material>
-        </visual>
-      </link>
-    </model>
-
-    <!-- Partial divider wall (east half, leaves a gap on the west side) -->
-    <model name="divider_wall">
-      <static>true</static>
-      <pose>0.18 0 0.0955 0 0 0</pose>
-      <link name="link">
-        <collision name="collision">
-          <geometry><box><size>0.35 0.025 0.191</size></box></geometry>
-        </collision>
-        <visual name="visual">
-          <geometry><box><size>0.35 0.025 0.191</size></box></geometry>
+          <geometry><box><size>0.05 0.610 0.191</size></box></geometry>
           <material><ambient>0.85 0.85 0.85 1</ambient><diffuse>0.85 0.85 0.85 1</diffuse></material>
-        </visual>
-      </link>
-    </model>
-
-    <!-- Box obstacle SE quadrant -->
-    <model name="obstacle_3">
-      <static>true</static>
-      <pose>0.30 -0.25 0.0955 0 0 0.785</pose>
-      <link name="link">
-        <collision name="collision">
-          <geometry><box><size>0.07 0.04 0.191</size></box></geometry>
-        </collision>
-        <visual name="visual">
-          <geometry><box><size>0.07 0.04 0.191</size></box></geometry>
-          <material><ambient>0.2 0.5 0.8 1</ambient><diffuse>0.2 0.5 0.8 1</diffuse></material>
-        </visual>
-      </link>
-    </model>
-
-    <!-- Box obstacle NW quadrant -->
-    <model name="obstacle_4">
-      <static>true</static>
-      <pose>-0.30 0.25 0.0955 0 0 0</pose>
-      <link name="link">
-        <collision name="collision">
-          <geometry><box><size>0.07 0.04 0.191</size></box></geometry>
-        </collision>
-        <visual name="visual">
-          <geometry><box><size>0.07 0.04 0.191</size></box></geometry>
-          <material><ambient>0.2 0.5 0.8 1</ambient><diffuse>0.2 0.5 0.8 1</diffuse></material>
         </visual>
       </link>
     </model>

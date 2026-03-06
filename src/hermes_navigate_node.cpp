@@ -22,7 +22,7 @@
 #include "ament_index_cpp/get_package_share_directory.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
-#include "hermes_navigate/bt_plugins/blackboard_check_bool_node.hpp"
+#include "hermes_navigate/bt_plugins/return_to_start_condition.hpp"
 #include "hermes_navigate/bt_plugins/search_frontiers_node.hpp"
 #include "hermes_navigate/bt_plugins/assign_costs_node.hpp"
 #include "hermes_navigate/bt_plugins/select_frontier_node.hpp"
@@ -115,9 +115,16 @@ HermesNavigateNode::on_configure(const rclcpp_lifecycle::State &)
   blackboard_->set("start_pose",        start_pose_);
   blackboard_->set("exploration_done",  false);
   blackboard_->set("return_to_start",   false);
+  blackboard_->set("nav_goal",          start_pose_);  // initialise to avoid unset port errors
 
   // ── Register BT nodes with this node as context ───────────────────────────
-  registerBTNodes();
+  rclcpp_lifecycle::LifecycleNode::WeakPtr self = shared_from_this();
+  ReturnToStartCondition::registerWithFactory(factory_);
+  SearchFrontiersNode::registerWithFactory(factory_, self);
+  AssignCostsNode::registerWithFactory(factory_, self);
+  SelectFrontierNode::registerWithFactory(factory_, self);
+  ReturnToStartNode::registerWithFactory(factory_);
+  NavigateToFrontierNode::registerWithFactory(factory_, self);
 
   // ── Load BT tree from XML ─────────────────────────────────────────────────
   if (!loadBehaviorTree(bt_xml_file_)) {
@@ -186,22 +193,6 @@ HermesNavigateNode::on_shutdown(const rclcpp_lifecycle::State &)
 {
   tick_timer_.reset();
   return CallbackReturn::SUCCESS;
-}
-
-// ─── registerBTNodes ──────────────────────────────────────────────────────────
-
-void HermesNavigateNode::registerBTNodes()
-{
-  // Capture a weak_ptr to this lifecycle node; BT nodes use it to access
-  // ROS 2 parameters, create publishers, and load pluginlib plugins.
-  rclcpp_lifecycle::LifecycleNode::WeakPtr self = shared_from_this();
-
-  BlackboardCheckBool::registerWithFactory(factory_);
-  SearchFrontiersNode::registerWithFactory(factory_, self);
-  AssignCostsNode::registerWithFactory(factory_, self);
-  SelectFrontierNode::registerWithFactory(factory_, self);
-  ReturnToStartNode::registerWithFactory(factory_, self);
-  NavigateToFrontierNode::registerWithFactory(factory_, self);
 }
 
 // ─── loadBehaviorTree ─────────────────────────────────────────────────────────

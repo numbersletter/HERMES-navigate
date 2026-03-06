@@ -78,7 +78,7 @@ pluginlib_export_plugin_description_file(
 # ──────────────────────────────────────────────────────────────────────────────
 add_library(hermes_navigate_bt_plugins SHARED
   # BT nodes
-  src/bt_plugins/blackboard_check_bool_node.cpp
+  src/bt_plugins/return_to_start_condition.cpp
   src/bt_plugins/search_frontiers_node.cpp
   src/bt_plugins/assign_costs_node.cpp
   src/bt_plugins/select_frontier_node.cpp
