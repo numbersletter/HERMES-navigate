@@ -69,6 +69,7 @@ private:
   rclcpp_lifecycle::LifecycleNode::WeakPtr parent_;
   rclcpp_action::Client<NavigateToPose>::SharedPtr action_client_;
   GoalHandle::SharedPtr goal_handle_;
+  std::string navigate_bt_xml_;
 
   enum class State { IDLE, PENDING, RUNNING, DONE_SUCCESS, DONE_FAILURE };
   State state_{State::IDLE};

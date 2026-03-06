@@ -117,7 +117,13 @@ HermesNavigateNode::on_configure(const rclcpp_lifecycle::State &)
   blackboard_->set("return_to_start",   false);
 
   // ── Register BT nodes with this node as context ───────────────────────────
-  registerBTNodes();
+  rclcpp_lifecycle::LifecycleNode::WeakPtr self = shared_from_this();
+  BlackboardCheckBool::registerWithFactory(factory_);
+  SearchFrontiersNode::registerWithFactory(factory_, self);
+  AssignCostsNode::registerWithFactory(factory_, self);
+  SelectFrontierNode::registerWithFactory(factory_, self);
+  ReturnToStartNode::registerWithFactory(factory_, self);
+  NavigateToFrontierNode::registerWithFactory(factory_, self);
 
   // ── Load BT tree from XML ─────────────────────────────────────────────────
   if (!loadBehaviorTree(bt_xml_file_)) {
@@ -186,22 +192,6 @@ HermesNavigateNode::on_shutdown(const rclcpp_lifecycle::State &)
 {
   tick_timer_.reset();
   return CallbackReturn::SUCCESS;
-}
-
-// ─── registerBTNodes ──────────────────────────────────────────────────────────
-
-void HermesNavigateNode::registerBTNodes()
-{
-  // Capture a weak_ptr to this lifecycle node; BT nodes use it to access
-  // ROS 2 parameters, create publishers, and load pluginlib plugins.
-  rclcpp_lifecycle::LifecycleNode::WeakPtr self = shared_from_this();
-
-  BlackboardCheckBool::registerWithFactory(factory_);
-  SearchFrontiersNode::registerWithFactory(factory_, self);
-  AssignCostsNode::registerWithFactory(factory_, self);
-  SelectFrontierNode::registerWithFactory(factory_, self);
-  ReturnToStartNode::registerWithFactory(factory_, self);
-  NavigateToFrontierNode::registerWithFactory(factory_, self);
 }
 
 // ─── loadBehaviorTree ─────────────────────────────────────────────────────────
