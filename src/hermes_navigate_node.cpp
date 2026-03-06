@@ -18,8 +18,10 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "ament_index_cpp/get_package_share_directory.hpp"
+#include "behaviortree_cpp/utils/shared_library.h"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
 #include "hermes_navigate/bt_plugins/blackboard_check_bool_node.hpp"
@@ -45,6 +47,60 @@ HermesNavigateNode::HermesNavigateNode(const rclcpp::NodeOptions & options)
   declare_parameter("base_frame",       std::string("base_link"));
   declare_parameter("map_frame",        std::string("map"));
   declare_parameter("robot_pose_topic", std::string("/robot_pose"));
+
+  // Nav2 BT plugin libraries to load into the BehaviorTree factory.
+  // This list mirrors the plugin_lib_names used by nav2_bt_navigator so that
+  // all standard Nav2 BT condition/action/decorator/control nodes are available
+  // inside any behavior-tree XML loaded by this node.
+  declare_parameter<std::vector<std::string>>(
+    "bt_plugins",
+    {
+      "nav2_compute_path_to_pose_action_bt_node",
+      "nav2_compute_path_through_poses_action_bt_node",
+      "nav2_smooth_path_action_bt_node",
+      "nav2_follow_path_action_bt_node",
+      "nav2_back_up_action_bt_node",
+      "nav2_spin_action_bt_node",
+      "nav2_wait_action_bt_node",
+      "nav2_assisted_teleop_action_bt_node",
+      "nav2_clear_costmap_service_bt_node",
+      "nav2_is_stuck_condition_bt_node",
+      "nav2_goal_reached_condition_bt_node",
+      "nav2_goal_updated_condition_bt_node",
+      "nav2_globally_updated_goal_condition_bt_node",
+      "nav2_is_path_valid_condition_bt_node",
+      "nav2_initial_pose_received_condition_bt_node",
+      "nav2_reinitialize_global_localization_service_bt_node",
+      "nav2_rate_controller_bt_node",
+      "nav2_distance_controller_bt_node",
+      "nav2_speed_controller_bt_node",
+      "nav2_truncate_path_action_bt_node",
+      "nav2_truncate_path_local_action_bt_node",
+      "nav2_goal_updater_node_bt_node",
+      "nav2_recovery_node_bt_node",
+      "nav2_pipeline_sequence_bt_node",
+      "nav2_round_robin_node_bt_node",
+      "nav2_transform_available_condition_bt_node",
+      "nav2_time_expired_condition_bt_node",
+      "nav2_path_expiring_timer_condition",
+      "nav2_distance_traveled_condition_bt_node",
+      "nav2_single_trigger_bt_node",
+      "nav2_goal_updated_controller_bt_node",
+      "nav2_navigate_through_poses_action_bt_node",
+      "nav2_navigate_to_pose_action_bt_node",
+      "nav2_remove_passed_goals_action_bt_node",
+      "nav2_planner_selector_bt_node",
+      "nav2_controller_selector_bt_node",
+      "nav2_goal_checker_selector_bt_node",
+      "nav2_controller_cancel_bt_node",
+      "nav2_path_longer_on_approach_bt_node",
+      "nav2_wait_cancel_bt_node",
+      "nav2_spin_cancel_bt_node",
+      "nav2_back_up_cancel_bt_node",
+      "nav2_assisted_teleop_cancel_bt_node",
+      "nav2_drive_on_heading_cancel_bt_node",
+      "nav2_is_battery_low_condition_bt_node",
+    });
 }
 
 // ─── on_configure ─────────────────────────────────────────────────────────────
@@ -192,6 +248,27 @@ HermesNavigateNode::on_shutdown(const rclcpp_lifecycle::State &)
 
 void HermesNavigateNode::registerBTNodes()
 {
+  // ── Load Nav2 BT plugin libraries ─────────────────────────────────────────
+  // Each library exposes BT_REGISTER_NODES which registers its node types
+  // (e.g. PipelineSequence, RateController) with the factory.  Failures are
+  // logged as warnings rather than errors so that a missing optional plugin
+  // does not prevent the node from starting.
+  const auto bt_plugins =
+    get_parameter("bt_plugins").as_string_array();
+
+  for (const auto & plugin : bt_plugins) {
+    try {
+      factory_.registerFromPlugin(BT::SharedLibrary::getOSName(plugin));
+      RCLCPP_DEBUG(get_logger(),
+        "HermesNavigateNode: registered Nav2 BT plugin '%s'.", plugin.c_str());
+    } catch (const std::exception & e) {
+      RCLCPP_WARN(get_logger(),
+        "HermesNavigateNode: could not load Nav2 BT plugin '%s': %s",
+        plugin.c_str(), e.what());
+    }
+  }
+
+  // ── Register HERMES-specific BT nodes ─────────────────────────────────────
   // Capture a weak_ptr to this lifecycle node; BT nodes use it to access
   // ROS 2 parameters, create publishers, and load pluginlib plugins.
   rclcpp_lifecycle::LifecycleNode::WeakPtr self = shared_from_this();
