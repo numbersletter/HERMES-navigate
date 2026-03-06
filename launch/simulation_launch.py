@@ -230,6 +230,7 @@ def generate_launch_description():
         parameters=[{
             "use_sim_time": True,
             "autostart":    True,
+            "bond_timeout": 0.0,
             "node_names": [
                 "hermes_navigate_node",
             ],
@@ -251,6 +252,7 @@ def generate_launch_description():
         spawn_robot,
 
         # Autonomy stack
+
         slam_toolbox,
         nav2_bringup,
         hermes_navigate,

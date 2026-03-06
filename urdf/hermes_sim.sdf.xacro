@@ -1,5 +1,5 @@
 <?xml version="1.0" ?>
-<sdf version="1.8" xmlns:xacro="http://ros.org/wiki/xacro">
+<sdf version="1.8" xmlns:xacro="http://ros.org/wiki/xacro" xmlns:gz="http://gazebosim.org/schema">
   <model name='hermes_robot' canonical_link='base_link'>
 
     <!-- Define robot constants -->
@@ -238,7 +238,7 @@
         <visualize>true</visualize>
         <update_rate>5</update_rate>
         <topic>scan</topic>
-        <gz_frame_id>lidar_link</gz_frame_id>
+        <gz:frame_id>lidar_link</gz:frame_id>
         <ray>
           <scan>
             <horizontal>
@@ -293,7 +293,7 @@
         <visualize>true</visualize>
         <update_rate>5.0</update_rate>
         <topic>depth_camera</topic>
-        <gz_frame_id>camera_link</gz_frame_id>
+        <gz:frame_id>camera_link</gz:frame_id>
         <camera>
           <horizontal_fov>1.047198</horizontal_fov>
           <image>

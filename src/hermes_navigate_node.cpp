@@ -119,6 +119,10 @@ HermesNavigateNode::on_configure(const rclcpp_lifecycle::State &)
 
   // ── Register BT nodes with this node as context ───────────────────────────
   rclcpp_lifecycle::LifecycleNode::WeakPtr self = shared_from_this();
+  factory_.registerNodeType<nav2_behavior_tree::PipelineSequence>("PipelineSequence");
+  factory_.registerNodeType<nav2_behavior_tree::RecoveryNode>("RecoveryNode");
+  factory_.registerNodeType<nav2_behavior_tree::RateController>("RateController");
+
   ReturnToStartCondition::registerWithFactory(factory_);
   SearchFrontiersNode::registerWithFactory(factory_, self);
   AssignCostsNode::registerWithFactory(factory_, self);

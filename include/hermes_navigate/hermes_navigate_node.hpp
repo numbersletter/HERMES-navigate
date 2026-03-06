@@ -25,6 +25,11 @@
 #include "rclcpp_lifecycle/lifecycle_node.hpp"
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_listener.h"
+#include "nav2_behavior_tree/plugins/control/pipeline_sequence.hpp"
+#include "nav2_behavior_tree/plugins/control/recovery_node.hpp"
+#include "nav2_behavior_tree/plugins/decorator/rate_controller.hpp"
+
+
 
 namespace hermes_navigate
 {

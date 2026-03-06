@@ -48,7 +48,7 @@ namespace hermes_navigate
  *   Input:  "robot_pose"  — geometry_msgs::msg::PoseStamped (current robot pose)
  *   Output: "frontiers"   — std::vector<Frontier>
  */
-class SearchFrontiersNode : public BT::SyncActionNode
+class SearchFrontiersNode : public BT::ActionNodeBase
 {
 public:
   /**
@@ -70,6 +70,8 @@ public:
     rclcpp_lifecycle::LifecycleNode::WeakPtr parent);
 
   BT::NodeStatus tick() override;
+
+  void halt() override {}
 
 private:
   rclcpp_lifecycle::LifecycleNode::WeakPtr parent_;
