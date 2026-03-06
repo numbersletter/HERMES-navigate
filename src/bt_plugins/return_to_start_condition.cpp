@@ -12,73 +12,44 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "hermes_navigate/bt_plugins/blackboard_check_bool_node.hpp"
-
-#include <string>
+#include "hermes_navigate/bt_plugins/return_to_start_condition.hpp"
 
 namespace hermes_navigate
 {
 
 // ─── Construction ─────────────────────────────────────────────────────────────
 
-BlackboardCheckBool::BlackboardCheckBool(
+ReturnToStartCondition::ReturnToStartCondition(
   const std::string & name,
   const BT::NodeConfig & config)
-: BT::SyncActionNode(name, config)
+: BT::ConditionNode(name, config)
 {
 }
 
 // ─── BT ports ─────────────────────────────────────────────────────────────────
 
-BT::PortsList BlackboardCheckBool::providedPorts()
+BT::PortsList ReturnToStartCondition::providedPorts()
 {
-  return {
-    BT::InputPort<bool>("value_A"),
-    BT::InputPort<bool>("value_B"),
-    BT::InputPort<std::string>("return_on_mismatch", "FAILURE",
-      "NodeStatus to return when value_A != value_B ('SUCCESS' or 'FAILURE')")
-  };
+  return {BT::InputPort<bool>("return_to_start")};
 }
 
 // ─── Tick ────────────────────────────────────────────────────────────────────
 
-BT::NodeStatus BlackboardCheckBool::tick()
+BT::NodeStatus ReturnToStartCondition::tick()
 {
-  auto a_res = getInput<bool>("value_A");
-  if (!a_res) {
-    throw BT::RuntimeError("BlackboardCheckBool: missing required port 'value_A': ",
-      a_res.error());
-  }
-
-  auto b_res = getInput<bool>("value_B");
-  if (!b_res) {
-    throw BT::RuntimeError("BlackboardCheckBool: missing required port 'value_B': ",
-      b_res.error());
-  }
-
-  if (a_res.value() == b_res.value()) {
-    return BT::NodeStatus::SUCCESS;
-  }
-
-  auto mismatch = getInput<std::string>("return_on_mismatch");
-  const std::string mismatch_str = mismatch ? mismatch.value() : "FAILURE";
-
-  if (mismatch_str == "SUCCESS") {
-    return BT::NodeStatus::SUCCESS;
-  }
-  if (mismatch_str != "FAILURE") {
+  auto res = getInput<bool>("return_to_start");
+  if (!res) {
     throw BT::RuntimeError(
-      "BlackboardCheckBool: 'return_on_mismatch' must be 'SUCCESS' or 'FAILURE', got: ",
-      mismatch_str);
+      "ReturnToStartCondition: missing required port 'return_to_start': ", res.error());
   }
-  return BT::NodeStatus::FAILURE;
+  return res.value() ? BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
 }
 
 // ─── Factory registration ─────────────────────────────────────────────────────
 
-void BlackboardCheckBool::registerWithFactory(BT::BehaviorTreeFactory & factory)
+void ReturnToStartCondition::registerWithFactory(BT::BehaviorTreeFactory & factory)
 {
-  factory.registerNodeType<BlackboardCheckBool>("BlackboardCheckBool");
+  factory.registerNodeType<ReturnToStartCondition>("ReturnToStartCondition");
 }
 
 }  // namespace hermes_navigate

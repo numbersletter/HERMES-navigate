@@ -12,33 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef HERMES_NAVIGATE__BT_PLUGINS__BLACKBOARD_CHECK_BOOL_NODE_HPP_
-#define HERMES_NAVIGATE__BT_PLUGINS__BLACKBOARD_CHECK_BOOL_NODE_HPP_
+#ifndef HERMES_NAVIGATE__BT_PLUGINS__RETURN_TO_START_CONDITION_HPP_
+#define HERMES_NAVIGATE__BT_PLUGINS__RETURN_TO_START_CONDITION_HPP_
 
 #include <string>
 
-#include "behaviortree_cpp/action_node.h"
+#include "behaviortree_cpp/condition_node.h"
 #include "behaviortree_cpp/bt_factory.h"
 
 namespace hermes_navigate
 {
 
 /**
- * @class BlackboardCheckBool
- * @brief BT condition node that compares two bool values read from the blackboard.
+ * @class ReturnToStartCondition
+ * @brief BT condition node that checks whether the robot should return to its
+ *        start pose.
  *
- * Returns SUCCESS when value_A == value_B; otherwise returns the status
- * specified by return_on_mismatch (default: FAILURE).
+ * Reads the "return_to_start" boolean from the blackboard (set by
+ * HermesNavigateNode on on_deactivate()) and returns SUCCESS when it is true,
+ * FAILURE otherwise.
  *
  * BT ports:
- *   Input: "value_A"            — bool  (typically a blackboard entry)
- *   Input: "value_B"            — bool  (typically a literal "true"/"false")
- *   Input: "return_on_mismatch" — string "SUCCESS" or "FAILURE" (default: "FAILURE")
+ *   Input: "return_to_start" — bool
  */
-class BlackboardCheckBool : public BT::SyncActionNode
+class ReturnToStartCondition : public BT::ConditionNode
 {
 public:
-  BlackboardCheckBool(
+  ReturnToStartCondition(
     const std::string & name,
     const BT::NodeConfig & config);
 
@@ -52,4 +52,4 @@ public:
 
 }  // namespace hermes_navigate
 
-#endif  // HERMES_NAVIGATE__BT_PLUGINS__BLACKBOARD_CHECK_BOOL_NODE_HPP_
+#endif  // HERMES_NAVIGATE__BT_PLUGINS__RETURN_TO_START_CONDITION_HPP_
