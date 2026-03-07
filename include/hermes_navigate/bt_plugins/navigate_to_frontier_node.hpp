@@ -33,11 +33,18 @@ namespace hermes_navigate
  * @brief BT action node that sends a navigation goal to the Nav2
  *        NavigateToPose action server.
  *
- * Reads the current frontier goal from the "goal" blackboard entry (set by
- * SelectFrontierNode) and forwards it to the Nav2 stack.
+ * Registered in the BT factory as "NavigateToPose" so it can be used as a
+ * shared navigation primitive in both the exploration pipeline and the
+ * return-to-start branch.  The goal pose is written to the "nav_goal"
+ * blackboard key by upstream goal-setter nodes (SelectFrontierNode for
+ * exploration, ReturnToStartNode for homing).
  *
  * Returns RUNNING while navigation is in progress, SUCCESS on arrival, and
  * FAILURE if the action server rejects the goal or navigation fails.
+ *
+ * If the goal on the blackboard changes while navigation is in progress the
+ * current goal is cancelled and FAILURE is returned so that the pipeline can
+ * immediately re-tick with the updated goal.
  *
  * BT ports:
  *   Input: "goal"  — geometry_msgs::msg::PoseStamped
@@ -55,7 +62,7 @@ public:
 
   static BT::PortsList providedPorts();
 
-  /// @brief Register this node type with the BT factory.
+  /// @brief Register this node type with the BT factory under the name "NavigateToPose".
   static void registerWithFactory(
     BT::BehaviorTreeFactory & factory,
     rclcpp_lifecycle::LifecycleNode::WeakPtr parent);
@@ -68,7 +75,6 @@ private:
   rclcpp_lifecycle::LifecycleNode::WeakPtr parent_;
   rclcpp_action::Client<NavigateToPose>::SharedPtr action_client_;
   GoalHandle::SharedPtr goal_handle_;
-  std::string navigate_bt_path_;
 
   geometry_msgs::msg::PoseStamped last_sent_goal_;
 

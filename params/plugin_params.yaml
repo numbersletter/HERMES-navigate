@@ -19,15 +19,9 @@ hermes_navigate_node:
     robot_pose_topic: "/robot_pose"
 
     # ── Nav2 server readiness ─────────────────────────────────────────────────
-    # Seconds to wait for navigate_to_pose and navigate_through_poses action
-    # servers before aborting configure.  Nav2 must be running before HERMES.
+    # Seconds to wait for the navigate_to_pose action server before aborting
+    # configure.  Nav2 must be running before HERMES-navigate is configured.
     nav2_server_timeout_s: 60.0
-
-    # ── Breadcrumb trail ──────────────────────────────────────────────────────
-    # Minimum distance [m] the robot must travel before a new breadcrumb pose
-    # is recorded.  A finer spacing gives a more precise return path at the
-    # cost of a longer waypoints list sent to navigate_through_poses.
-    breadcrumb_spacing_m: 2.0
 
     # ── Frontier search plugin selection ──────────────────────────────────────
     # Change to any other BaseFrontierSearch plugin type to swap the algorithm.

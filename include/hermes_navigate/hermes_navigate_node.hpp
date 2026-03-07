@@ -17,7 +17,6 @@
 
 #include <memory>
 #include <string>
-#include <vector>
 
 #include "behaviortree_cpp/bt_factory.h"
 #include "behaviortree_cpp/behavior_tree.h"
@@ -54,7 +53,8 @@ namespace hermes_navigate
  *
  * Services:
  *   ~/stop (std_srvs/Trigger) — Signals the BT to navigate the robot back to
- *                               its start pose, retracing the breadcrumb trail.
+ *                               its start pose. Nav2 plans the path autonomously
+ *                               via the navigate_to_pose action server.
  *                               Can be called while active or paused.
  *
  * Parameters (all declared in on_configure):
@@ -65,9 +65,7 @@ namespace hermes_navigate
  *   map_frame             (string) — Map TF frame            (default "map").
  *   robot_pose_topic      (string) — Topic for the current robot pose
  *                                    (default "/robot_pose").
- *   breadcrumb_spacing_m  (double) — Min distance [m] between breadcrumb poses
- *                                    recorded during exploration (default 2.0).
- *   nav2_server_timeout_s (double) — Seconds to wait for Nav2 action servers
+ *   nav2_server_timeout_s (double) — Seconds to wait for Nav2 action server
  *                                    during configure (default 60.0).
  */
 class HermesNavigateNode : public rclcpp_lifecycle::LifecycleNode
@@ -113,10 +111,6 @@ private:
   // ── Robot pose subscription ───────────────────────────────────────────────
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr pose_sub_;
   geometry_msgs::msg::PoseStamped latest_pose_;
-
-  // ── Breadcrumb trail (recorded during active exploration) ─────────────────
-  std::vector<geometry_msgs::msg::PoseStamped> breadcrumbs_;
-  double breadcrumb_spacing_m_{2.0};
 
   // ── Stop service ──────────────────────────────────────────────────────────
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr stop_srv_;
