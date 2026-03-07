@@ -16,6 +16,7 @@
 #define HERMES_NAVIGATE__BT_PLUGINS__RETURN_TO_START_NODE_HPP_
 
 #include <string>
+#include <vector>
 
 #include "behaviortree_cpp/action_node.h"
 #include "behaviortree_cpp/bt_factory.h"
@@ -26,17 +27,22 @@ namespace hermes_navigate
 
 /**
  * @class ReturnToStartNode
- * @brief BT action node that copies the robot's start pose onto the shared
- *        blackboard as the current navigation goal.
+ * @brief BT action node that builds the return-to-start waypoint list from the
+ *        robot's breadcrumb trail and writes it onto the blackboard.
  *
- * The node does NOT send any navigation request itself; it simply writes
- * "start_pose" to the "goal" output port (mapped to the same "{nav_goal}"
- * blackboard key read by NavigateToFrontierNode). NavigateToFrontierNode then
- * handles the actual navigation via the Nav2 NavigateToPose action server.
+ * The node reads the exploration breadcrumbs recorded by HermesNavigateNode,
+ * reverses them so the robot retraces its path, then appends the original
+ * start pose as the final destination.  The resulting waypoints list is
+ * written to the "waypoints" output port for NavigateThroughWaypointsNode to
+ * consume via the Nav2 NavigateThroughPoses action server.
+ *
+ * If no breadcrumbs are available the waypoints list contains only the start
+ * pose, allowing Nav2 to plan a direct path home.
  *
  * BT ports:
- *   Input:  "start_pose" — geometry_msgs::msg::PoseStamped
- *   Output: "goal"       — geometry_msgs::msg::PoseStamped
+ *   Input:  "start_pose"  — geometry_msgs::msg::PoseStamped
+ *   Input:  "breadcrumbs" — std::vector<geometry_msgs::msg::PoseStamped>
+ *   Output: "waypoints"   — std::vector<geometry_msgs::msg::PoseStamped>
  */
 class ReturnToStartNode : public BT::SyncActionNode
 {

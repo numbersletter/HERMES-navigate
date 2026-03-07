@@ -14,6 +14,8 @@
 
 #include "hermes_navigate/bt_plugins/return_to_start_node.hpp"
 
+#include <vector>
+
 namespace hermes_navigate
 {
 
@@ -32,7 +34,8 @@ BT::PortsList ReturnToStartNode::providedPorts()
 {
   return {
     BT::InputPort<geometry_msgs::msg::PoseStamped>("start_pose"),
-    BT::OutputPort<geometry_msgs::msg::PoseStamped>("goal")
+    BT::InputPort<std::vector<geometry_msgs::msg::PoseStamped>>("breadcrumbs"),
+    BT::OutputPort<std::vector<geometry_msgs::msg::PoseStamped>>("waypoints"),
   };
 }
 
@@ -45,7 +48,23 @@ BT::NodeStatus ReturnToStartNode::tick()
     throw BT::RuntimeError(
       "ReturnToStartNode: missing required port 'start_pose': ", start_pose_res.error());
   }
-  setOutput("goal", start_pose_res.value());
+
+  // Build return waypoints: reverse the breadcrumb trail so the robot retraces
+  // its exploration path, then finish at the true start pose.
+  std::vector<geometry_msgs::msg::PoseStamped> waypoints;
+  auto breadcrumbs_res =
+    getInput<std::vector<geometry_msgs::msg::PoseStamped>>("breadcrumbs");
+  if (breadcrumbs_res && !breadcrumbs_res.value().empty()) {
+    const auto & crumbs = breadcrumbs_res.value();
+    waypoints.reserve(crumbs.size() + 1);
+    for (auto it = crumbs.rbegin(); it != crumbs.rend(); ++it) {
+      waypoints.push_back(*it);
+    }
+  }
+  // Always end at the recorded start pose.
+  waypoints.push_back(start_pose_res.value());
+
+  setOutput("waypoints", waypoints);
   return BT::NodeStatus::SUCCESS;
 }
 

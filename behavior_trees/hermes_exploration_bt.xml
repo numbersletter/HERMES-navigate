@@ -4,58 +4,73 @@
   =================================
   Entry point: loaded by HermesNavigateNode on on_configure().
 
-  Lifecycle behaviour:
+  Lifecycle / service behaviour:
     CONFIGURED  → Tree is loaded but NOT ticked. Robot is stationary.
     ACTIVE      → Tick timer starts. Exploration branch runs.
-    DEACTIVATING→ HermesNavigateNode sets return_to_start=true on the
-                  blackboard. ReturnToStartCondition fires on the next tick,
-                  ReturnToStart writes start_pose to nav_goal, and
-                  NavigateToFrontier drives the robot home.
+    DEACTIVATED → Tick timer stops; tree is halted (paused). Robot stays put.
+    ~/stop srv  → Sets return_to_start=true and restarts tick timer so the
+                   ReturnBranch executes and the robot retraces its breadcrumb
+                   trail back to the start pose via navigate_through_poses.
 
-  Tree structure (PipelineSequence):
-  ┌─ PipelineSequence
-  │   ├─ [Goal-selection Fallback]
-  │   │     ├─ [Return branch]  Sequence
-  │   │     │     ReturnToStartCondition(return_to_start)
-  │   │     │     ReturnToStart(start_pose → nav_goal)   ← sets goal, no nav
-  │   │     │
-  │   │     └─ [Exploration branch]  RateController(1 Hz)
-  │   │           Sequence
-  │   │             SearchFrontiers   ← WavefrontFrontierDetector plugin
-  │   │             AssignCosts       ← InformationGainPlugin + EuclideanPlugin
-  │   │             SelectFrontier    ← hysteresis-based goal selection
+  Tree structure (top-level Fallback):
+  ┌─ Fallback (MainFallback)
   │   │
-  │   └─ [Navigation]  ForceSuccess
-  │         RetryUntilSuccessful(num_attempts=3)
-  │           NavigateToFrontier(nav_goal)   ← sends goal to Nav2, retries 3×
+  │   ├─ [Return branch]  Sequence
+  │   │     ReturnToStartCondition(return_to_start)
+  │   │     ReturnToStart(start_pose, breadcrumbs → waypoints)
+  │   │       └─ Reverses breadcrumb trail + appends start_pose
+  │   │     NavigateThroughWaypoints(waypoints)
+  │   │       └─ Sends reversed trail to navigate_through_poses action server
+  │   │
+  │   └─ [Exploration branch]  PipelineSequence
+  │         ├─ RateController(1 Hz)
+  │         │     Sequence
+  │         │       SearchFrontiers   ← WavefrontFrontierDetector plugin
+  │         │       AssignCosts       ← InformationGainPlugin + EuclideanPlugin
+  │         │       SelectFrontier    ← hysteresis-based goal selection
+  │         └─ ForceSuccess
+  │               RetryUntilSuccessful(num_attempts=3)
+  │                 NavigateToFrontier(nav_goal) ← navigate_to_pose action server
 
   Blackboard entries (written by HermesNavigateNode before the first tick):
-    start_pose       (geometry_msgs/PoseStamped) — captured at configure
-    return_to_start  (bool)                      — true when deactivating
-    exploration_done (bool)                      — set by SelectFrontier
-    robot_pose       (geometry_msgs/PoseStamped) — updated every tick
-    nav_goal         (geometry_msgs/PoseStamped) — written by SelectFrontier
-                                                   or ReturnToStart
+    start_pose       (geometry_msgs/PoseStamped)        — captured at configure
+    return_to_start  (bool)                              — true when ~/stop called
+    exploration_done (bool)                              — set by SelectFrontier
+    robot_pose       (geometry_msgs/PoseStamped)         — updated every tick
+    nav_goal         (geometry_msgs/PoseStamped)         — written by SelectFrontier
+    breadcrumbs      (vector<geometry_msgs/PoseStamped>) — trail recorded each tick
+    return_waypoints (vector<geometry_msgs/PoseStamped>) — set by ReturnToStart
 -->
 <root BTCPP_format="4" main_tree_to_execute="HermesExplorationBT">
 
   <BehaviorTree ID="HermesExplorationBT">
-    <PipelineSequence name="ExplorationPipeline">
 
-      <!-- ─── Goal-selection Fallback ────────────────────────────────────────
-           Picks between returning home (when signalled) and frontier search.
-           Either way the winner writes the chosen pose to {nav_goal}, which
-           NavigateToFrontier reads in the next PipelineSequence child.
+    <!--
+      Top-level Fallback: the return-to-start branch is tried first every tick.
+      If return_to_start is false the condition immediately fails and the
+      exploration pipeline runs instead.
+    -->
+    <Fallback name="MainFallback">
+
+      <!-- ─── Return-to-Start branch ───────────────────────────────────────
+           Fires when the ~/stop service sets return_to_start=true.
+           ReturnToStart builds the reversed breadcrumb waypoints list;
+           NavigateThroughWaypoints drives the robot home via nav2's
+           navigate_through_poses action (waypoints WE supply, not nav2-planned).
       -->
-      <Fallback name="GoalSelector">
+      <Sequence name="ReturnBranch">
+        <ReturnToStartCondition return_to_start="{return_to_start}"/>
+        <ReturnToStart
+          start_pose="{start_pose}"
+          breadcrumbs="{breadcrumbs}"
+          waypoints="{return_waypoints}"/>
+        <NavigateThroughWaypoints waypoints="{return_waypoints}"/>
+      </Sequence>
 
-        <!-- Return-to-Start branch: fires when return_to_start == true -->
-        <Sequence name="ReturnBranch">
-          <ReturnToStartCondition return_to_start="{return_to_start}"/>
-          <ReturnToStart start_pose="{start_pose}" goal="{nav_goal}"/>
-        </Sequence>
+      <!-- ─── Exploration pipeline ─────────────────────────────────────── -->
+      <PipelineSequence name="ExplorationPipeline">
 
-        <!-- Exploration branch: rate-limited frontier search + scoring ──── -->
+        <!-- Rate-limited frontier search + scoring ──────────────────────── -->
         <RateController hz="1.0">
           <Sequence>
 
@@ -80,23 +95,23 @@
           </Sequence>
         </RateController>
 
-      </Fallback>
+        <!-- Navigation to the selected frontier goal ─────────────────────
+          ForceSuccess wrapping RetryUntilSuccessful: NavigateToFrontier is
+          retried up to 3 times on failure (obstacle, timeout, etc.).
+          If all 3 attempts fail ForceSuccess converts FAILURE to SUCCESS,
+          allowing the pipeline to re-run the goal-selection step on the next
+          tick and pick a new goal.
+        -->
+        <ForceSuccess>
+          <RetryUntilSuccessful num_attempts="3">
+            <NavigateToFrontier goal="{nav_goal}"/>
+          </RetryUntilSuccessful>
+        </ForceSuccess>
 
-      <!-- ─── Navigation to the selected goal ────────────────────────────── -->
-      <!--
-        ForceSuccess wrapping RetryUntilSuccessful: NavigateToFrontier is
-        retried up to 3 times on failure (obstacle, timeout, etc.).
-        If all 3 attempts fail ForceSuccess converts FAILURE to SUCCESS,
-        allowing the pipeline to re-run the goal-selection step on the next
-        tick and pick a new goal.
-      -->
-      <ForceSuccess>
-        <RetryUntilSuccessful num_attempts="3">
-          <NavigateToFrontier goal="{nav_goal}"/>
-        </RetryUntilSuccessful>
-      </ForceSuccess>
+      </PipelineSequence>
 
-    </PipelineSequence>
+    </Fallback>
+
   </BehaviorTree>
 
 </root>
