@@ -30,11 +30,11 @@ slam_toolbox:
     debug_logging: false
     throttle_scans: 1           # process every scan
     transform_publish_period: 0.02   # 50 Hz TF
-    map_update_interval: 5.0   # seconds between full map publishes
+    map_update_interval: 1.0    # faster map updates for small environment
     resolution: 0.05            # m/cell
-    max_laser_range: 12.0       # m — match LIDAR spec
-    minimum_travel_distance: 0.10   # m before new keyframe
-    minimum_travel_heading: 0.174   # rad (~10°) before new keyframe
+    max_laser_range: 3.5        # m — match LIDAR spec (3.5m in URDF)
+    minimum_travel_distance: 0.05   # m before new keyframe (tighter for small room)
+    minimum_travel_heading: 0.1     # rad before new keyframe (tighter for small room)
 
     # ── Scan matching ────────────────────────────────────────────────────────
     scan_buffer_size: 10
@@ -54,7 +54,7 @@ slam_toolbox:
     correlation_search_space_smear_deviation: 0.1
 
     # ── Loop closure ─────────────────────────────────────────────────────────
-    loop_search_space_dimension: 8.0
+    loop_search_space_dimension: 2.0  # Reduced heavily since environment is only ~1.2m
     loop_search_space_resolution: 0.05
     loop_search_space_smear_deviation: 0.03
 
