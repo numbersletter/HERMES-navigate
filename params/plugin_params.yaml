@@ -61,3 +61,5 @@ hermes_navigate_node:
       hysteresis_factor:   0.15   # Fraction above current score needed to switch goal
       min_frontier_score:  0.0    # Minimum composite score to consider a frontier viable
                                   # (0.0 = accept any frontier with non-negative score)
+      blacklist_radius_m:  0.5    # Exclusion radius (m) around each blacklisted position;
+                                  # frontiers within this distance are skipped
