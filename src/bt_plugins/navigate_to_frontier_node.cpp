@@ -17,7 +17,6 @@
 #include <chrono>
 #include <string>
 
-#include "ament_index_cpp/get_package_share_directory.hpp"
 #include "rclcpp/rclcpp.hpp"
 
 namespace hermes_navigate
@@ -39,13 +38,6 @@ NavigateToFrontierNode::NavigateToFrontierNode(
 
   action_client_ = rclcpp_action::create_client<NavigateToPose>(
     node, "navigate_to_pose");
-
-  // Resolve the path to navigate_with_replanning.xml once at construction time.
-  // Nav2's bt_navigator accepts a file path in the behavior_tree goal field and
-  // loads the BT XML itself.
-  navigate_bt_path_ =
-    ament_index_cpp::get_package_share_directory("hermes_navigate") +
-    "/behavior_trees/navigate_with_replanning.xml";
 }
 
 // ─── BT ports ─────────────────────────────────────────────────────────────────
@@ -82,7 +74,6 @@ BT::NodeStatus NavigateToFrontierNode::onStart()
 
   NavigateToPose::Goal goal_msg;
   goal_msg.pose = goal_pose;
-  goal_msg.behavior_tree = navigate_bt_path_;
 
   auto send_goal_options = rclcpp_action::Client<NavigateToPose>::SendGoalOptions();
 
@@ -163,7 +154,7 @@ void NavigateToFrontierNode::registerWithFactory(
   rclcpp_lifecycle::LifecycleNode::WeakPtr parent)
 {
   factory.registerBuilder<NavigateToFrontierNode>(
-    "NavigateToFrontier",
+    "NavigateToPose",
     [parent](const std::string & name, const BT::NodeConfig & config) {
       return std::make_unique<NavigateToFrontierNode>(name, config, parent);
     });
