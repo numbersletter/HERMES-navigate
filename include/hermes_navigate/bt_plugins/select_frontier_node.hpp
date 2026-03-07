@@ -50,7 +50,7 @@ namespace hermes_navigate
  *   Input:  "scored_frontiers"  — std::vector<ScoredFrontier>
  *   Input:  "robot_pose"        — geometry_msgs::msg::PoseStamped
  *   Input:  "blacklisted_goals" — std::vector<geometry_msgs::msg::PoseStamped>
- *   Output: "goal"              — geometry_msgs::msg::PoseStamped
+ *   Output: "nav_goal"          — geometry_msgs::msg::PoseStamped
  *   Output: "exploration_done"  — bool
  */
 class SelectFrontierNode : public BT::SyncActionNode

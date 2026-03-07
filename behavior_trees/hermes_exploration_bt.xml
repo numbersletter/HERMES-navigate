@@ -26,8 +26,8 @@
   │         │     Sequence
   │         │       SearchFrontiers   ← WavefrontFrontierDetector plugin
   │         │       AssignCosts       ← InformationGainPlugin + EuclideanPlugin
-  │         │       SelectFrontier    ← hysteresis selection, skips blacklist
-  │         │       NavigateToFrontier← sets nav_goal from selected frontier
+  │         │       SelectFrontier    ← hysteresis selection, skips blacklist;
+  │         │                            writes nav_goal directly to blackboard
   │         └─ Fallback (NavOrBlacklist)
   │               RetryUntilSuccessful(num_attempts=3)
   │                 NavigateToPose(nav_goal)  ← Nav2 built-in; 3 attempts
@@ -38,12 +38,10 @@
     return_to_start   (bool)                      — true when ~/stop is called
     exploration_done  (bool)                      — set by SelectFrontier
     robot_pose        (geometry_msgs/PoseStamped) — updated every tick
-    frontier_goal     (geometry_msgs/PoseStamped) — written by SelectFrontier
-    nav_goal          (geometry_msgs/PoseStamped) — written by NavigateToFrontier
+    nav_goal          (geometry_msgs/PoseStamped) — written by SelectFrontier
                                                     or ReturnToStart
     blacklisted_goals (vector<PoseStamped>)       — grown by BlacklistFrontier;
                                                     read by SelectFrontier
-    node              (rclcpp::Node::SharedPtr)   — client node for Nav2 BT nodes
 -->
 <root BTCPP_format="4" main_tree_to_execute="HermesExplorationBT">
 
@@ -86,17 +84,15 @@
               robot_pose="{robot_pose}"
               scored_frontiers="{scored_frontiers}"/>
 
-            <!-- 3. Select best non-blacklisted frontier (with hysteresis) -->
+            <!-- 3. Select best non-blacklisted frontier (with hysteresis).
+                 Writes the chosen pose directly to nav_goal so the downstream
+                 NavigateToPose node (Nav2 built-in) can navigate there. -->
             <SelectFrontier
               scored_frontiers="{scored_frontiers}"
               robot_pose="{robot_pose}"
               blacklisted_goals="{blacklisted_goals}"
-              goal="{frontier_goal}"
+              nav_goal="{nav_goal}"
               exploration_done="{exploration_done}"/>
-
-            <!-- 4. Copy the selected frontier goal onto the nav_goal blackboard
-                 entry consumed by the downstream Nav2 NavigateToPose node. -->
-            <NavigateToFrontier goal="{frontier_goal}" nav_goal="{nav_goal}"/>
 
           </Sequence>
         </RateController>

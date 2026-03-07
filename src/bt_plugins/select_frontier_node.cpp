@@ -56,7 +56,7 @@ BT::PortsList SelectFrontierNode::providedPorts()
     BT::InputPort<std::vector<ScoredFrontier>>("scored_frontiers"),
     BT::InputPort<geometry_msgs::msg::PoseStamped>("robot_pose"),
     BT::InputPort<std::vector<geometry_msgs::msg::PoseStamped>>("blacklisted_goals"),
-    BT::OutputPort<geometry_msgs::msg::PoseStamped>("goal"),
+    BT::OutputPort<geometry_msgs::msg::PoseStamped>("nav_goal"),
     BT::OutputPort<bool>("exploration_done"),
   };
 }
@@ -127,7 +127,7 @@ BT::NodeStatus SelectFrontierNode::tick()
   if (has_active_goal_) {
     double required_score = active_goal_score_ * (1.0 + hysteresis_factor_);
     if (best->score < required_score) {
-      setOutput("goal", active_goal_);
+      setOutput("nav_goal", active_goal_);
       return BT::NodeStatus::SUCCESS;
     }
   }
@@ -137,7 +137,7 @@ BT::NodeStatus SelectFrontierNode::tick()
   active_goal_       = best->frontier.goal_pose;
   active_goal_score_ = best->score;
 
-  setOutput("goal", active_goal_);
+  setOutput("nav_goal", active_goal_);
   return BT::NodeStatus::SUCCESS;
 }
 
