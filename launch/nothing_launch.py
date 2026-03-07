@@ -219,8 +219,5 @@ def generate_launch_description():
 
         # Autonomy stack
 
-        slam_toolbox,
-        nav2_bringup,
-
         LogInfo(msg="HERMES simulation ready — all nodes launched."),
     ])

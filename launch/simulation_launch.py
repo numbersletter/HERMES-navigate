@@ -69,6 +69,7 @@ def generate_launch_description():
     pkg_hermes_navigate = get_package_share_directory("hermes_navigate")
     pkg_ros_gz_sim      = get_package_share_directory("ros_gz_sim")
     pkg_nav2_bringup    = get_package_share_directory("nav2_bringup")
+    pkg_slam_toolbox    = get_package_share_directory("slam_toolbox")
 
     # ── Paths to key files ────────────────────────────────────────────────────
     default_world   = os.path.join(pkg_hermes_navigate, "worlds",
@@ -176,15 +177,14 @@ def generate_launch_description():
     )
 
     # ── 5. SLAM Toolbox (online async) ────────────────────────────────────────
-    slam_toolbox = Node(
-        package="slam_toolbox",
-        executable="async_slam_toolbox_node",
-        name="slam_toolbox",
-        output="screen",
-        parameters=[
-            slam_params,
-            {"use_sim_time": True},
-        ],
+    slam_toolbox = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(pkg_slam_toolbox, "launch", "online_async_launch.py")
+        ),
+        launch_arguments={
+            "use_sim_time": "true",
+            "slam_params_file": slam_params,
+        }.items(),
     )
 
     # ── 6. Nav2 (navigation stack) ────────────────────────────────────────────
@@ -252,11 +252,7 @@ def generate_launch_description():
         spawn_robot,
 
         # Autonomy stack
-
         slam_toolbox,
         nav2_bringup,
-        hermes_navigate,
-        lifecycle_manager,
-
         LogInfo(msg="HERMES simulation ready — all nodes launched."),
     ])
