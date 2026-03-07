@@ -18,6 +18,12 @@ hermes_navigate_node:
     map_frame: "map"            # Map TF frame
     robot_pose_topic: "/robot_pose"
 
+    # ── Global costmap topic ──────────────────────────────────────────────────
+    # Nav2 raw costmap topic subscribed to by SearchFrontiersNode and
+    # AssignCostsNode (transient_local QoS, must match Nav2's publisher).
+    # Change this if Nav2 is launched with a custom namespace or topic name.
+    global_costmap_topic: "/global_costmap/costmap_raw"
+
     # ── Frontier search plugin selection ──────────────────────────────────────
     # Change to any other BaseFrontierSearch plugin type to swap the algorithm.
     frontier_search:

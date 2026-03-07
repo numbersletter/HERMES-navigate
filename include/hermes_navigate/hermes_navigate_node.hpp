@@ -53,8 +53,11 @@ namespace hermes_navigate
  *   bt_tick_rate_hz    (double)  — BT tick frequency [Hz]  (default 10.0).
  *   base_frame         (string)  — Robot base TF frame     (default "base_link").
  *   map_frame          (string)  — Map TF frame            (default "map").
- *   robot_pose_topic   (string)  — Topic for the current robot pose
- *                                   (default "/robot_pose").
+ *   robot_pose_topic      (string)  — Topic for the current robot pose
+ *                                     (default "/robot_pose").
+ *   global_costmap_topic  (string)  — Topic on which Nav2 publishes the raw
+ *                                     global costmap (transient_local QoS).
+ *                                     (default "/global_costmap/costmap_raw").
  */
 class HermesNavigateNode : public rclcpp_lifecycle::LifecycleNode
 {
