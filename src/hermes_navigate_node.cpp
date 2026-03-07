@@ -18,8 +18,11 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <thread>
+#include <vector>
 
 #include "ament_index_cpp/get_package_share_directory.hpp"
+#include "nav2_behavior_tree/plugins/action/navigate_to_pose_action.hpp"
 #include "nav2_msgs/action/navigate_to_pose.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
@@ -30,6 +33,7 @@
 #include "hermes_navigate/bt_plugins/select_frontier_node.hpp"
 #include "hermes_navigate/bt_plugins/return_to_start_node.hpp"
 #include "hermes_navigate/bt_plugins/navigate_to_frontier_node.hpp"
+#include "hermes_navigate/bt_plugins/blacklist_frontier_node.hpp"
 
 namespace hermes_navigate
 {
@@ -48,6 +52,19 @@ HermesNavigateNode::HermesNavigateNode(const rclcpp::NodeOptions & options)
   declare_parameter("map_frame",              std::string("map"));
   declare_parameter("robot_pose_topic",       std::string("/robot_pose"));
   declare_parameter("nav2_server_timeout_s",  60.0);
+}
+
+// ─── Destructor ──────────────────────────────────────────────────────────────
+
+HermesNavigateNode::~HermesNavigateNode()
+{
+  // Guard against the case where on_configure was never called.
+  if (nav_client_executor_) {
+    nav_client_executor_->cancel();
+  }
+  if (nav_client_spin_thread_.joinable()) {
+    nav_client_spin_thread_.join();
+  }
 }
 
 // ─── on_configure ─────────────────────────────────────────────────────────────
@@ -99,6 +116,19 @@ HermesNavigateNode::on_configure(const rclcpp_lifecycle::State &)
 
   RCLCPP_INFO(get_logger(), "HermesNavigateNode: navigate_to_pose server is ready.");
 
+  // ── Nav2 BT action client node ───────────────────────────────────────────
+  // Create a dedicated rclcpp::Node for Nav2's NavigateToPoseAction BT node.
+  // Nav2's BtActionNode retrieves the ROS node for its action client from the
+  // blackboard under the key "node".  We spin it in a background thread so
+  // that action callbacks are processed independently of the BT tick timer.
+  nav_client_node_ = std::make_shared<rclcpp::Node>(
+    get_name() + std::string("_nav_client"));
+  nav_client_executor_ =
+    std::make_shared<rclcpp::executors::SingleThreadedExecutor>();
+  nav_client_executor_->add_node(nav_client_node_);
+  nav_client_spin_thread_ = std::thread(
+    [this]() {nav_client_executor_->spin();});
+
   // ── TF listener ──────────────────────────────────────────────────────────
   tf_buffer_   = std::make_shared<tf2_ros::Buffer>(get_clock());
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
@@ -145,6 +175,12 @@ HermesNavigateNode::on_configure(const rclcpp_lifecycle::State &)
   blackboard_->set("exploration_done",  false);
   blackboard_->set("return_to_start",   false);
   blackboard_->set("nav_goal",          start_pose_);  // initialise to avoid unset port errors
+  blackboard_->set("frontier_goal",     start_pose_);  // initialised to avoid unset port errors
+  blackboard_->set("blacklisted_goals",
+    std::vector<geometry_msgs::msg::PoseStamped>{});  // grows as Nav2 fails
+  // Nav2's NavigateToPoseAction retrieves the ROS node for its action client
+  // from the blackboard under the standard key "node".
+  blackboard_->set<rclcpp::Node::SharedPtr>("node", nav_client_node_);
 
   // ── Register BT nodes with this node as context ───────────────────────────
   rclcpp_lifecycle::LifecycleNode::WeakPtr self = shared_from_this();
@@ -152,12 +188,24 @@ HermesNavigateNode::on_configure(const rclcpp_lifecycle::State &)
   factory_.registerNodeType<nav2_behavior_tree::RecoveryNode>("RecoveryNode");
   factory_.registerNodeType<nav2_behavior_tree::RateController>("RateController");
 
+  // Register Nav2's NavigateToPoseAction as the "NavigateToPose" BT node.
+  // This is the standard Nav2 action BT node that calls the navigate_to_pose
+  // action server; it retrieves the ROS action client node from the blackboard
+  // under the "node" key set above.
+  factory_.registerBuilder<nav2_behavior_tree::NavigateToPoseAction>(
+    "NavigateToPose",
+    [](const std::string & name, const BT::NodeConfig & config) {
+      return std::make_unique<nav2_behavior_tree::NavigateToPoseAction>(
+        name, "navigate_to_pose", config);
+    });
+
   ReturnToStartCondition::registerWithFactory(factory_);
   SearchFrontiersNode::registerWithFactory(factory_, self);
   AssignCostsNode::registerWithFactory(factory_, self);
   SelectFrontierNode::registerWithFactory(factory_, self);
   ReturnToStartNode::registerWithFactory(factory_);
   NavigateToFrontierNode::registerWithFactory(factory_, self);
+  BlacklistFrontierNode::registerWithFactory(factory_);
 
   // ── Load BT tree from XML ─────────────────────────────────────────────────
   if (!loadBehaviorTree(bt_xml_file_)) {
@@ -228,6 +276,15 @@ HermesNavigateNode::on_cleanup(const rclcpp_lifecycle::State &)
   tf_listener_.reset();
   tf_buffer_.reset();
   pose_sub_.reset();
+  // Stop the nav-client background executor.
+  if (nav_client_executor_) {
+    nav_client_executor_->cancel();
+  }
+  if (nav_client_spin_thread_.joinable()) {
+    nav_client_spin_thread_.join();
+  }
+  nav_client_node_.reset();
+  nav_client_executor_.reset();
   RCLCPP_INFO(get_logger(), "HermesNavigateNode cleaned up.");
   return CallbackReturn::SUCCESS;
 }
@@ -324,6 +381,9 @@ int main(int argc, char ** argv)
   rclcpp::init(argc, argv);
   auto node = std::make_shared<hermes_navigate::HermesNavigateNode>();
   rclcpp::spin(node->get_node_base_interface());
+  // Reset the node before shutdown so the destructor cancels the nav-client
+  // executor and joins the spin thread before rclcpp teardown.
+  node.reset();
   rclcpp::shutdown();
   return 0;
 }

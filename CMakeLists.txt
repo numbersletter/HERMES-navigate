@@ -86,6 +86,7 @@ add_library(hermes_navigate_bt_plugins SHARED
   src/bt_plugins/select_frontier_node.cpp
   src/bt_plugins/return_to_start_node.cpp
   src/bt_plugins/navigate_to_frontier_node.cpp
+  src/bt_plugins/blacklist_frontier_node.cpp
 )
 target_include_directories(hermes_navigate_bt_plugins PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

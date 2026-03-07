@@ -33,15 +33,23 @@ namespace hermes_navigate
  * @brief BT action node that selects the best scored frontier as the next
  *        navigation goal, with hysteresis to prevent rapid goal-switching.
  *
- * The best frontier (highest composite score) is selected. Hysteresis
- * requires a new frontier's score to exceed the current goal's score by
- * `hysteresis_factor` (fractional) before switching.  When no viable
- * frontier remains, the node sets `exploration_done = true` on the
+ * The best frontier (highest composite score) is selected, subject to two
+ * filters:
+ *   1. Its score must be at least `min_frontier_score`.
+ *   2. Its goal pose must not be within `blacklist_radius_m` of any position
+ *      in the `blacklisted_goals` blackboard list.  Frontiers that Nav2
+ *      failed to reach (recorded by BlacklistFrontierNode) are excluded so
+ *      that the robot never wastes time retrying unreachable goals.
+ *
+ * Hysteresis requires a new frontier's score to exceed the current goal's
+ * score by `hysteresis_factor` (fractional) before switching.  When no
+ * viable frontier remains, the node sets `exploration_done = true` on the
  * blackboard.
  *
  * BT ports:
  *   Input:  "scored_frontiers"  — std::vector<ScoredFrontier>
  *   Input:  "robot_pose"        — geometry_msgs::msg::PoseStamped
+ *   Input:  "blacklisted_goals" — std::vector<geometry_msgs::msg::PoseStamped>
  *   Output: "goal"              — geometry_msgs::msg::PoseStamped
  *   Output: "exploration_done"  — bool
  */
@@ -73,6 +81,7 @@ private:
   // Parameters
   double hysteresis_factor_{0.15};   ///< Fraction above current score to switch.
   double min_frontier_score_{0.0};   ///< Minimum score to consider viable.
+  double blacklist_radius_m_{0.5};   ///< Exclusion radius around each blacklisted pose [m].
 };
 
 }  // namespace hermes_navigate

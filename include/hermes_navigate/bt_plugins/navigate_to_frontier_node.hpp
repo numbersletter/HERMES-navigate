@@ -15,14 +15,11 @@
 #ifndef HERMES_NAVIGATE__BT_PLUGINS__NAVIGATE_TO_FRONTIER_NODE_HPP_
 #define HERMES_NAVIGATE__BT_PLUGINS__NAVIGATE_TO_FRONTIER_NODE_HPP_
 
-#include <memory>
 #include <string>
 
 #include "behaviortree_cpp/action_node.h"
 #include "behaviortree_cpp/bt_factory.h"
 #include "geometry_msgs/msg/pose_stamped.hpp"
-#include "nav2_msgs/action/navigate_to_pose.hpp"
-#include "rclcpp_action/rclcpp_action.hpp"
 #include "rclcpp_lifecycle/lifecycle_node.hpp"
 
 namespace hermes_navigate
@@ -30,31 +27,24 @@ namespace hermes_navigate
 
 /**
  * @class NavigateToFrontierNode
- * @brief BT action node that sends a navigation goal to the Nav2
- *        NavigateToPose action server.
+ * @brief Sync BT node that copies the selected frontier goal pose onto the
+ *        shared blackboard for the downstream NavigateToPose BT node to consume.
  *
- * Registered in the BT factory as "NavigateToPose" so it can be used as a
- * shared navigation primitive in both the exploration pipeline and the
- * return-to-start branch.  The goal pose is written to the "nav_goal"
- * blackboard key by upstream goal-setter nodes (SelectFrontierNode for
- * exploration, ReturnToStartNode for homing).
+ * This node is responsible only for *goal-setting*: it reads the frontier goal
+ * chosen by SelectFrontierNode from its "goal" input port and writes it to the
+ * "nav_goal" output port (which maps to the {nav_goal} blackboard entry).
  *
- * Returns RUNNING while navigation is in progress, SUCCESS on arrival, and
- * FAILURE if the action server rejects the goal or navigation fails.
- *
- * If the goal on the blackboard changes while navigation is in progress the
- * current goal is cancelled and FAILURE is returned so that the pipeline can
- * immediately re-tick with the updated goal.
+ * The actual navigation is delegated to Nav2's built-in NavigateToPose BT node
+ * which reads {nav_goal} from the blackboard and calls the navigate_to_pose
+ * action server.
  *
  * BT ports:
- *   Input: "goal"  — geometry_msgs::msg::PoseStamped
+ *   Input:  "goal"     — geometry_msgs::msg::PoseStamped  (from SelectFrontier)
+ *   Output: "nav_goal" — geometry_msgs::msg::PoseStamped  (consumed by NavigateToPose)
  */
-class NavigateToFrontierNode : public BT::StatefulActionNode
+class NavigateToFrontierNode : public BT::SyncActionNode
 {
 public:
-  using NavigateToPose = nav2_msgs::action::NavigateToPose;
-  using GoalHandle = rclcpp_action::ClientGoalHandle<NavigateToPose>;
-
   NavigateToFrontierNode(
     const std::string & name,
     const BT::NodeConfig & config,
@@ -62,24 +52,15 @@ public:
 
   static BT::PortsList providedPorts();
 
-  /// @brief Register this node type with the BT factory under the name "NavigateToPose".
+  /// @brief Register this node type with the BT factory as "NavigateToFrontier".
   static void registerWithFactory(
     BT::BehaviorTreeFactory & factory,
     rclcpp_lifecycle::LifecycleNode::WeakPtr parent);
 
-  BT::NodeStatus onStart() override;
-  BT::NodeStatus onRunning() override;
-  void onHalted() override;
+  BT::NodeStatus tick() override;
 
 private:
   rclcpp_lifecycle::LifecycleNode::WeakPtr parent_;
-  rclcpp_action::Client<NavigateToPose>::SharedPtr action_client_;
-  GoalHandle::SharedPtr goal_handle_;
-
-  geometry_msgs::msg::PoseStamped last_sent_goal_;
-
-  enum class State { IDLE, PENDING, RUNNING, DONE_SUCCESS, DONE_FAILURE };
-  State state_{State::IDLE};
 };
 
 }  // namespace hermes_navigate

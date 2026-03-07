@@ -14,7 +14,6 @@
 
 #include "hermes_navigate/bt_plugins/navigate_to_frontier_node.hpp"
 
-#include <chrono>
 #include <string>
 
 #include "rclcpp/rclcpp.hpp"
@@ -28,123 +27,50 @@ NavigateToFrontierNode::NavigateToFrontierNode(
   const std::string & name,
   const BT::NodeConfig & config,
   rclcpp_lifecycle::LifecycleNode::WeakPtr parent)
-: BT::StatefulActionNode(name, config),
+: BT::SyncActionNode(name, config),
   parent_(parent)
 {
-  auto node = parent_.lock();
-  if (!node) {
-    throw std::runtime_error("NavigateToFrontierNode: parent node expired.");
-  }
-
-  action_client_ = rclcpp_action::create_client<NavigateToPose>(
-    node, "navigate_to_pose");
 }
 
 // ─── BT ports ─────────────────────────────────────────────────────────────────
 
 BT::PortsList NavigateToFrontierNode::providedPorts()
 {
-  return {BT::InputPort<geometry_msgs::msg::PoseStamped>("goal")};
+  return {
+    BT::InputPort<geometry_msgs::msg::PoseStamped>("goal"),
+    BT::OutputPort<geometry_msgs::msg::PoseStamped>("nav_goal"),
+  };
 }
 
-// ─── onStart ─────────────────────────────────────────────────────────────────
+// ─── Tick ────────────────────────────────────────────────────────────────────
 
-BT::NodeStatus NavigateToFrontierNode::onStart()
+BT::NodeStatus NavigateToFrontierNode::tick()
 {
-  auto node = parent_.lock();
-
   auto goal_res = getInput<geometry_msgs::msg::PoseStamped>("goal");
   if (!goal_res) {
+    auto node = parent_.lock();
     if (node) {
       RCLCPP_WARN(node->get_logger(),
-        "NavigateToFrontierNode: no goal on blackboard.");
+        "NavigateToFrontierNode: no frontier goal available.");
     }
     return BT::NodeStatus::FAILURE;
   }
 
-  const auto & goal_pose = goal_res.value();
+  const auto & goal = goal_res.value();
 
-  if (!action_client_->wait_for_action_server(std::chrono::seconds(5))) {
-    if (node) {
-      RCLCPP_WARN(node->get_logger(),
-        "NavigateToFrontierNode: navigate_to_pose server not available.");
-    }
-    return BT::NodeStatus::FAILURE;
-  }
+  // Write the selected frontier's goal pose to the nav_goal blackboard entry
+  // so that the downstream NavigateToPose BT node (provided by Nav2) can
+  // dispatch the navigate_to_pose action request.
+  setOutput("nav_goal", goal);
 
-  NavigateToPose::Goal goal_msg;
-  goal_msg.pose = goal_pose;
-
-  auto send_goal_options = rclcpp_action::Client<NavigateToPose>::SendGoalOptions();
-
-  send_goal_options.goal_response_callback =
-    [this](const GoalHandle::SharedPtr & handle) {
-      if (!handle) {
-        state_ = State::DONE_FAILURE;
-      } else {
-        goal_handle_ = handle;
-        state_ = State::RUNNING;
-      }
-    };
-
-  send_goal_options.result_callback =
-    [this](const GoalHandle::WrappedResult & result) {
-      if (result.code == rclcpp_action::ResultCode::SUCCEEDED) {
-        state_ = State::DONE_SUCCESS;
-      } else {
-        state_ = State::DONE_FAILURE;
-      }
-    };
-
-  state_ = State::PENDING;
-  last_sent_goal_ = goal_pose;
-  action_client_->async_send_goal(goal_msg, send_goal_options);
-
+  auto node = parent_.lock();
   if (node) {
     RCLCPP_DEBUG(node->get_logger(),
-      "NavigateToFrontierNode: navigating to (%.2f, %.2f).",
-      goal_pose.pose.position.x, goal_pose.pose.position.y);
+      "NavigateToFrontierNode: frontier goal set at (%.2f, %.2f).",
+      goal.pose.position.x, goal.pose.position.y);
   }
 
-  return BT::NodeStatus::RUNNING;
-}
-
-// ─── onRunning ────────────────────────────────────────────────────────────────
-
-BT::NodeStatus NavigateToFrontierNode::onRunning()
-{
-  // If the goal changed on the blackboard, cancel the current goal and
-  // return FAILURE so the pipeline can re-send with the new goal.
-  auto goal_res = getInput<geometry_msgs::msg::PoseStamped>("goal");
-  if (goal_res) {
-    const auto & new_goal = goal_res.value();
-    if (new_goal.pose.position.x != last_sent_goal_.pose.position.x ||
-      new_goal.pose.position.y != last_sent_goal_.pose.position.y)
-    {
-      onHalted();
-      return BT::NodeStatus::FAILURE;
-    }
-  }
-
-  switch (state_) {
-    case State::DONE_SUCCESS:
-      return BT::NodeStatus::SUCCESS;
-    case State::DONE_FAILURE:
-      return BT::NodeStatus::FAILURE;
-    default:
-      return BT::NodeStatus::RUNNING;
-  }
-}
-
-// ─── onHalted ────────────────────────────────────────────────────────────────
-
-void NavigateToFrontierNode::onHalted()
-{
-  if (goal_handle_ && (state_ == State::PENDING || state_ == State::RUNNING)) {
-    action_client_->async_cancel_goal(goal_handle_);
-  }
-  state_ = State::IDLE;
-  goal_handle_.reset();
+  return BT::NodeStatus::SUCCESS;
 }
 
 // ─── Factory registration ─────────────────────────────────────────────────────
@@ -154,7 +80,7 @@ void NavigateToFrontierNode::registerWithFactory(
   rclcpp_lifecycle::LifecycleNode::WeakPtr parent)
 {
   factory.registerBuilder<NavigateToFrontierNode>(
-    "NavigateToPose",
+    "NavigateToFrontier",
     [parent](const std::string & name, const BT::NodeConfig & config) {
       return std::make_unique<NavigateToFrontierNode>(name, config, parent);
     });

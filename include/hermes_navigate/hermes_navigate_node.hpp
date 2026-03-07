@@ -17,6 +17,7 @@
 
 #include <memory>
 #include <string>
+#include <thread>
 
 #include "behaviortree_cpp/bt_factory.h"
 #include "behaviortree_cpp/behavior_tree.h"
@@ -72,6 +73,7 @@ class HermesNavigateNode : public rclcpp_lifecycle::LifecycleNode
 {
 public:
   explicit HermesNavigateNode(const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
+  ~HermesNavigateNode();
 
   // ── Lifecycle callbacks ────────────────────────────────────────────────────
   rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn
@@ -111,6 +113,15 @@ private:
   // ── Robot pose subscription ───────────────────────────────────────────────
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr pose_sub_;
   geometry_msgs::msg::PoseStamped latest_pose_;
+
+  // ── Nav2 BT node client ───────────────────────────────────────────────────
+  // Nav2's NavigateToPoseAction BT node retrieves the ROS node it uses for
+  // its action client from the blackboard under the key "node".  We create a
+  // dedicated rclcpp::Node for this purpose and spin it in a background thread
+  // so its callbacks are processed independently of our lifecycle-node timer.
+  rclcpp::Node::SharedPtr nav_client_node_;
+  rclcpp::executors::SingleThreadedExecutor::SharedPtr nav_client_executor_;
+  std::thread nav_client_spin_thread_;
 
   // ── Stop service ──────────────────────────────────────────────────────────
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr stop_srv_;
