@@ -116,7 +116,6 @@ private:
 
   // ── Breadcrumb trail (recorded during active exploration) ─────────────────
   std::vector<geometry_msgs::msg::PoseStamped> breadcrumbs_;
-  geometry_msgs::msg::PoseStamped last_breadcrumb_;
   double breadcrumb_spacing_m_{2.0};
 
   // ── Stop service ──────────────────────────────────────────────────────────

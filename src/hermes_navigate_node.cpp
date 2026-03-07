@@ -214,7 +214,6 @@ HermesNavigateNode::on_activate(const rclcpp_lifecycle::State &)
 
   // Clear the breadcrumb trail for a fresh exploration run.
   breadcrumbs_.clear();
-  last_breadcrumb_ = geometry_msgs::msg::PoseStamped{};
   blackboard_->set("breadcrumbs",      std::vector<geometry_msgs::msg::PoseStamped>{});
   blackboard_->set("return_waypoints", std::vector<geometry_msgs::msg::PoseStamped>{});
 
@@ -292,14 +291,15 @@ void HermesNavigateNode::handleStop(
   // NavigateThroughWaypointsNode.
   blackboard_->set("return_to_start", true);
 
-  // Restart the tick timer if it was stopped by on_deactivate (paused state).
-  if (!tick_timer_ || tick_timer_->is_canceled()) {
-    auto period_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-      std::chrono::duration<double>(1.0 / bt_tick_rate_hz_));
-    tick_timer_ = create_wall_timer(period_ns, [this]() {tickTree();});
-    RCLCPP_INFO(get_logger(),
-      "HermesNavigateNode: restarted tick timer for return-to-start journey.");
-  }
+  // (Re)start the tick timer.  on_deactivate resets it to nullptr; tickTree()
+  // calls cancel() when the BT finishes.  Both cases are handled by always
+  // resetting and creating a fresh timer here.
+  tick_timer_.reset();
+  auto period_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+    std::chrono::duration<double>(1.0 / bt_tick_rate_hz_));
+  tick_timer_ = create_wall_timer(period_ns, [this]() {tickTree();});
+  RCLCPP_INFO(get_logger(),
+    "HermesNavigateNode: tick timer (re)started for return-to-start journey.");
 
   response->success = true;
   response->message = "Return to start initiated.";
@@ -333,17 +333,18 @@ void HermesNavigateNode::tickTree()
     // Append a breadcrumb each time the robot has moved at least
     // breadcrumb_spacing_m_ from the previous recorded position.  The trail
     // is used by ReturnToStartNode to build the reverse return path.
-    bool need_crumb = last_breadcrumb_.header.frame_id.empty();
+    // Use breadcrumbs_.empty() as the initialisation guard so the first pose
+    // is always captured regardless of its frame_id value.
+    bool need_crumb = breadcrumbs_.empty();
     if (!need_crumb) {
       const double dx =
-        latest_pose_.pose.position.x - last_breadcrumb_.pose.position.x;
+        latest_pose_.pose.position.x - breadcrumbs_.back().pose.position.x;
       const double dy =
-        latest_pose_.pose.position.y - last_breadcrumb_.pose.position.y;
+        latest_pose_.pose.position.y - breadcrumbs_.back().pose.position.y;
       need_crumb = std::sqrt(dx * dx + dy * dy) >= breadcrumb_spacing_m_;
     }
     if (need_crumb) {
       breadcrumbs_.push_back(latest_pose_);
-      last_breadcrumb_ = latest_pose_;
       blackboard_->set("breadcrumbs", breadcrumbs_);
     }
   }
