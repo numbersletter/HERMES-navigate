@@ -27,6 +27,7 @@ find_package(tf2_geometry_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(pluginlib REQUIRED)
 
@@ -48,6 +49,7 @@ set(COMMON_DEPS
   tf2_geometry_msgs
   geometry_msgs
   std_msgs
+  std_srvs
   visualization_msgs
   pluginlib
   ament_index_cpp
@@ -83,7 +85,7 @@ add_library(hermes_navigate_bt_plugins SHARED
   src/bt_plugins/assign_costs_node.cpp
   src/bt_plugins/select_frontier_node.cpp
   src/bt_plugins/return_to_start_node.cpp
-  src/bt_plugins/navigate_to_frontier_node.cpp
+  src/bt_plugins/blacklist_frontier_node.cpp
 )
 target_include_directories(hermes_navigate_bt_plugins PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

@@ -32,7 +32,7 @@ BT::PortsList ReturnToStartNode::providedPorts()
 {
   return {
     BT::InputPort<geometry_msgs::msg::PoseStamped>("start_pose"),
-    BT::OutputPort<geometry_msgs::msg::PoseStamped>("goal")
+    BT::OutputPort<geometry_msgs::msg::PoseStamped>("goal"),
   };
 }
 
@@ -45,6 +45,9 @@ BT::NodeStatus ReturnToStartNode::tick()
     throw BT::RuntimeError(
       "ReturnToStartNode: missing required port 'start_pose': ", start_pose_res.error());
   }
+  // Write the start pose as the navigation goal.  The NavigateToPose BT node
+  // in the same branch reads {nav_goal} and calls the navigate_to_pose action
+  // server; Nav2 plans the path autonomously.
   setOutput("goal", start_pose_res.value());
   return BT::NodeStatus::SUCCESS;
 }

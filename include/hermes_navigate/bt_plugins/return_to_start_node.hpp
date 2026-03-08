@@ -26,13 +26,13 @@ namespace hermes_navigate
 
 /**
  * @class ReturnToStartNode
- * @brief BT action node that copies the robot's start pose onto the shared
+ * @brief BT action node that writes the robot's start pose to the shared
  *        blackboard as the current navigation goal.
  *
- * The node does NOT send any navigation request itself; it simply writes
- * "start_pose" to the "goal" output port (mapped to the same "{nav_goal}"
- * blackboard key read by NavigateToFrontierNode). NavigateToFrontierNode then
- * handles the actual navigation via the Nav2 NavigateToPose action server.
+ * The node simply copies "start_pose" to the "goal" output port (mapped to
+ * the "{nav_goal}" blackboard key).  The NavigateToPose BT node in the same
+ * Sequence branch then calls the Nav2 navigate_to_pose action server, which
+ * autonomously plans the path back to the start position.
  *
  * BT ports:
  *   Input:  "start_pose" — geometry_msgs::msg::PoseStamped
