@@ -18,6 +18,11 @@ hermes_navigate_node:
     map_frame: "map"            # Map TF frame
     robot_pose_topic: "/robot_pose"
 
+    # ── Nav2 server readiness ─────────────────────────────────────────────────
+    # Seconds to wait for the navigate_to_pose action server before aborting
+    # configure.  Nav2 must be running before HERMES-navigate is configured.
+    nav2_server_timeout_s: 60.0
+
     # ── Frontier search plugin selection ──────────────────────────────────────
     # Change to any other BaseFrontierSearch plugin type to swap the algorithm.
     frontier_search:
@@ -56,3 +61,5 @@ hermes_navigate_node:
       hysteresis_factor:   0.15   # Fraction above current score needed to switch goal
       min_frontier_score:  0.0    # Minimum composite score to consider a frontier viable
                                   # (0.0 = accept any frontier with non-negative score)
+      blacklist_radius_m:  0.5    # Exclusion radius (m) around each blacklisted position;
+                                  # frontiers within this distance are skipped

@@ -41,8 +41,11 @@ SelectFrontierNode::SelectFrontierNode(
     rclcpp::ParameterValue(0.15));
   node->declare_parameter("select_frontier.min_frontier_score",
     rclcpp::ParameterValue(0.0));
+  node->declare_parameter("select_frontier.blacklist_radius_m",
+    rclcpp::ParameterValue(0.5));
   hysteresis_factor_  = node->get_parameter("select_frontier.hysteresis_factor").as_double();
   min_frontier_score_ = node->get_parameter("select_frontier.min_frontier_score").as_double();
+  blacklist_radius_m_ = node->get_parameter("select_frontier.blacklist_radius_m").as_double();
 }
 
 // ─── BT ports ─────────────────────────────────────────────────────────────────
@@ -52,7 +55,8 @@ BT::PortsList SelectFrontierNode::providedPorts()
   return {
     BT::InputPort<std::vector<ScoredFrontier>>("scored_frontiers"),
     BT::InputPort<geometry_msgs::msg::PoseStamped>("robot_pose"),
-    BT::OutputPort<geometry_msgs::msg::PoseStamped>("goal"),
+    BT::InputPort<std::vector<geometry_msgs::msg::PoseStamped>>("blacklisted_goals"),
+    BT::OutputPort<geometry_msgs::msg::PoseStamped>("nav_goal"),
     BT::OutputPort<bool>("exploration_done"),
   };
 }
@@ -69,10 +73,42 @@ BT::NodeStatus SelectFrontierNode::tick()
 
   const auto & scored = scored_res.value();
 
-  // Filter viable frontiers
+  // Read the blacklist (may be absent if no frontier has been blacklisted yet).
+  std::vector<geometry_msgs::msg::PoseStamped> blacklist;
+  auto bl_res =
+    getInput<std::vector<geometry_msgs::msg::PoseStamped>>("blacklisted_goals");
+  if (bl_res) {
+    blacklist = bl_res.value();
+  }
+
+  // Helper: returns true if the given goal pose is too close to any blacklisted
+  // position and should therefore be excluded from selection.
+  // Uses squared-distance comparison to avoid sqrt in the inner loop.
+  // Note: this check is O(blacklist_size) per frontier; in typical exploration
+  // runs the blacklist remains small (single-digit entries), so this is not a
+  // performance concern in practice.
+  const double radius_sq = blacklist_radius_m_ * blacklist_radius_m_;
+  auto is_blacklisted = [&](const geometry_msgs::msg::PoseStamped & pose) -> bool {
+    for (const auto & bl : blacklist) {
+      const double dx = pose.pose.position.x - bl.pose.position.x;
+      const double dy = pose.pose.position.y - bl.pose.position.y;
+      if ((dx * dx + dy * dy) < radius_sq) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // If the currently tracked goal was blacklisted, reset hysteresis so a fresh
+  // frontier can be selected on this tick.
+  if (has_active_goal_ && is_blacklisted(active_goal_)) {
+    has_active_goal_ = false;
+  }
+
+  // Find the best viable (above-threshold, non-blacklisted) frontier.
   const ScoredFrontier * best = nullptr;
   for (const auto & sf : scored) {
-    if (sf.score >= min_frontier_score_) {
+    if (sf.score >= min_frontier_score_ && !is_blacklisted(sf.frontier.goal_pose)) {
       if (!best || sf.score > best->score) {
         best = &sf;
       }
@@ -91,7 +127,7 @@ BT::NodeStatus SelectFrontierNode::tick()
   if (has_active_goal_) {
     double required_score = active_goal_score_ * (1.0 + hysteresis_factor_);
     if (best->score < required_score) {
-      setOutput("goal", active_goal_);
+      setOutput("nav_goal", active_goal_);
       return BT::NodeStatus::SUCCESS;
     }
   }
@@ -101,7 +137,7 @@ BT::NodeStatus SelectFrontierNode::tick()
   active_goal_       = best->frontier.goal_pose;
   active_goal_score_ = best->score;
 
-  setOutput("goal", active_goal_);
+  setOutput("nav_goal", active_goal_);
   return BT::NodeStatus::SUCCESS;
 }
 
