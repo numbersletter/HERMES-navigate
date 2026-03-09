@@ -54,7 +54,7 @@ slam_toolbox:
     correlation_search_space_smear_deviation: 0.1
 
     # ── Loop closure ─────────────────────────────────────────────────────────
-    loop_search_space_dimension: 2.0  # Reduced heavily since environment is only ~1.2m
+    loop_search_space_dimension: 2.5  # Reduced heavily since environment is only ~1.2m
     loop_search_space_resolution: 0.05
     loop_search_space_smear_deviation: 0.03
 

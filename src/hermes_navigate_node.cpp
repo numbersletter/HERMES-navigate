@@ -156,12 +156,16 @@ HermesNavigateNode::on_configure(const rclcpp_lifecycle::State &)
   factory_.registerNodeType<nav2_behavior_tree::RecoveryNode>("RecoveryNode");
   factory_.registerNodeType<nav2_behavior_tree::RateController>("RateController");
 
-  // Nav2's NavigateToPoseAction BT node.  Using registerNodeType is sufficient:
-  // the nav2_behavior_tree base class (BtActionNode) creates its own action
-  // client using the shared rclcpp node that is spun by the BT executor.  No
-  // dedicated client node or "node" blackboard entry is required when the node
-  // is registered this way — Nav2 resolves the node internally.
-  factory_.registerNodeType<nav2_behavior_tree::NavigateToPoseAction>("NavigateToPose");
+  // NavigateToPoseAction needs (xml_tag_name, action_name, config), therefore
+  // it must be registered with a custom builder instead of registerNodeType.
+  BT::NodeBuilder navigate_to_pose_builder =
+    [](const std::string & name, const BT::NodeConfiguration & config)
+    {
+      return std::make_unique<nav2_behavior_tree::NavigateToPoseAction>(
+        name, "navigate_to_pose", config);
+    };
+  factory_.registerBuilder<nav2_behavior_tree::NavigateToPoseAction>(
+    "NavigateToPose", navigate_to_pose_builder);
 
   ReturnToStartCondition::registerWithFactory(factory_);
   SearchFrontiersNode::registerWithFactory(factory_, self);
