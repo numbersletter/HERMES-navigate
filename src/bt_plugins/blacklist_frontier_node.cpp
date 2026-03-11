@@ -16,6 +16,8 @@
 
 #include <vector>
 
+#include "rclcpp/rclcpp.hpp"
+
 namespace hermes_navigate
 {
 
@@ -23,8 +25,10 @@ namespace hermes_navigate
 
 BlacklistFrontierNode::BlacklistFrontierNode(
   const std::string & name,
-  const BT::NodeConfig & config)
-: BT::SyncActionNode(name, config)
+  const BT::NodeConfig & config,
+  rclcpp::Logger logger)
+: BT::SyncActionNode(name, config),
+  logger_(logger)
 {
 }
 
@@ -45,6 +49,8 @@ BT::NodeStatus BlacklistFrontierNode::tick()
   auto goal_res = getInput<geometry_msgs::msg::PoseStamped>("goal");
   if (!goal_res) {
     // Nothing to blacklist; this should not normally happen.
+    RCLCPP_WARN(logger_,
+      "BlacklistFrontierNode: 'goal' port not set — nothing to blacklist.");
     return BT::NodeStatus::SUCCESS;
   }
 
@@ -66,11 +72,20 @@ BT::NodeStatus BlacklistFrontierNode::tick()
     const double dx = new_goal.pose.position.x - existing.pose.position.x;
     const double dy = new_goal.pose.position.y - existing.pose.position.y;
     if ((dx * dx + dy * dy) < kDupRadiusSq) {
+      RCLCPP_DEBUG(logger_,
+        "BlacklistFrontierNode: goal (%.2f, %.2f) already blacklisted — skipping duplicate.",
+        new_goal.pose.position.x, new_goal.pose.position.y);
       return BT::NodeStatus::SUCCESS;  // already blacklisted
     }
   }
 
   // Append the failed frontier and write the updated list back.
+  RCLCPP_WARN(logger_,
+    "BlacklistFrontierNode: blacklisting frontier at (%.2f, %.2f) "
+    "[blacklist now has %zu entries].",
+    new_goal.pose.position.x, new_goal.pose.position.y,
+    blacklist.size() + 1);
+
   blacklist.push_back(new_goal);
   setOutput("blacklisted_goals", blacklist);
 
@@ -79,9 +94,15 @@ BT::NodeStatus BlacklistFrontierNode::tick()
 
 // ─── Factory registration ─────────────────────────────────────────────────────
 
-void BlacklistFrontierNode::registerWithFactory(BT::BehaviorTreeFactory & factory)
+void BlacklistFrontierNode::registerWithFactory(
+  BT::BehaviorTreeFactory & factory,
+  rclcpp::Logger logger)
 {
-  factory.registerNodeType<BlacklistFrontierNode>("BlacklistFrontier");
+  factory.registerBuilder<BlacklistFrontierNode>(
+    "BlacklistFrontier",
+    [logger](const std::string & name, const BT::NodeConfig & config) {
+      return std::make_unique<BlacklistFrontierNode>(name, config, logger);
+    });
 }
 
 }  // namespace hermes_navigate
