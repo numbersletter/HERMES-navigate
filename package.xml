@@ -42,6 +42,7 @@
   <depend>visualization_msgs</depend>
 
   <!-- pluginlib for BT node plugin registration -->
+  <depend>lifecycle_msgs</depend>
   <depend>pluginlib</depend>
 
   <test_depend>ament_lint_auto</test_depend>

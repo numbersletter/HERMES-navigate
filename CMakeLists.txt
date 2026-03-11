@@ -29,6 +29,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(visualization_msgs REQUIRED)
+find_package(lifecycle_msgs REQUIRED)
 find_package(pluginlib REQUIRED)
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -38,6 +39,7 @@ set(COMMON_DEPS
   rclcpp
   rclcpp_action
   rclcpp_lifecycle
+  lifecycle_msgs
   nav2_behavior_tree
   nav2_msgs
   nav2_util
