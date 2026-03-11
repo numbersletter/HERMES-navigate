@@ -249,12 +249,12 @@ HermesNavigateNode::on_configure(const rclcpp_lifecycle::State &)
   factory_.registerBuilder<nav2_behavior_tree::NavigateToPoseAction>(
     "NavigateToPose", navigate_to_pose_builder);
 
-  ReturnToStartCondition::registerWithFactory(factory_);
+  ReturnToStartCondition::registerWithFactory(factory_, get_logger());
   SearchFrontiersNode::registerWithFactory(factory_, self);
   AssignCostsNode::registerWithFactory(factory_, self);
   SelectFrontierNode::registerWithFactory(factory_, self);
-  ReturnToStartNode::registerWithFactory(factory_);
-  BlacklistFrontierNode::registerWithFactory(factory_);
+  ReturnToStartNode::registerWithFactory(factory_, get_logger());
+  BlacklistFrontierNode::registerWithFactory(factory_, get_logger());
 
   // ── Load BT tree from XML ─────────────────────────────────────────────────
   if (!loadBehaviorTree(bt_xml_file_)) {
@@ -401,12 +401,18 @@ void HermesNavigateNode::tickTree()
   try {
     BT::NodeStatus status = tree_.tickOnce();
 
-    if (status == BT::NodeStatus::FAILURE) {
+    if (status == BT::NodeStatus::RUNNING) {
+      RCLCPP_DEBUG(get_logger(), "HermesNavigateNode: BT tick → RUNNING.");
+    } else if (status == BT::NodeStatus::FAILURE) {
       // FAILURE during exploration means SelectFrontier found no viable frontier
       // (exploration_done=true) or an unexpected error occurred.  Either way,
       // stop ticking.
+      bool exploration_done = false;
+      blackboard_->get("exploration_done", exploration_done);
       RCLCPP_INFO(get_logger(),
-        "HermesNavigateNode: BT finished with status FAILURE. Stopping tick timer.");
+        "HermesNavigateNode: BT finished with status FAILURE "
+        "(exploration_done=%s). Stopping tick timer.",
+        exploration_done ? "true" : "false");
       tick_timer_->cancel();
     } else if (status == BT::NodeStatus::SUCCESS) {
       // SUCCESS during the return-to-start branch means the robot has reached
@@ -424,6 +430,10 @@ void HermesNavigateNode::tickTree()
           "HermesNavigateNode: BT finished with status SUCCESS (returned to start). "
           "Stopping tick timer.");
         tick_timer_->cancel();
+      } else {
+        RCLCPP_INFO(get_logger(),
+          "HermesNavigateNode: BT tick → SUCCESS (navigation leg complete). "
+          "Continuing exploration.");
       }
     }
   } catch (const std::exception & e) {

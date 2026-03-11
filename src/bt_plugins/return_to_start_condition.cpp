@@ -14,6 +14,8 @@
 
 #include "hermes_navigate/bt_plugins/return_to_start_condition.hpp"
 
+#include "rclcpp/rclcpp.hpp"
+
 namespace hermes_navigate
 {
 
@@ -21,8 +23,10 @@ namespace hermes_navigate
 
 ReturnToStartCondition::ReturnToStartCondition(
   const std::string & name,
-  const BT::NodeConfig & config)
-: BT::ConditionNode(name, config)
+  const BT::NodeConfig & config,
+  rclcpp::Logger logger)
+: BT::ConditionNode(name, config),
+  logger_(logger)
 {
 }
 
@@ -42,14 +46,25 @@ BT::NodeStatus ReturnToStartCondition::tick()
     throw BT::RuntimeError(
       "ReturnToStartCondition: missing required port 'return_to_start': ", res.error());
   }
-  return res.value() ? BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
+  if (res.value()) {
+    RCLCPP_INFO(logger_,
+      "ReturnToStartCondition: return_to_start=true — activating return-to-start branch.");
+    return BT::NodeStatus::SUCCESS;
+  }
+  return BT::NodeStatus::FAILURE;
 }
 
 // ─── Factory registration ─────────────────────────────────────────────────────
 
-void ReturnToStartCondition::registerWithFactory(BT::BehaviorTreeFactory & factory)
+void ReturnToStartCondition::registerWithFactory(
+  BT::BehaviorTreeFactory & factory,
+  rclcpp::Logger logger)
 {
-  factory.registerNodeType<ReturnToStartCondition>("ReturnToStartCondition");
+  factory.registerBuilder<ReturnToStartCondition>(
+    "ReturnToStartCondition",
+    [logger](const std::string & name, const BT::NodeConfig & config) {
+      return std::make_unique<ReturnToStartCondition>(name, config, logger);
+    });
 }
 
 }  // namespace hermes_navigate

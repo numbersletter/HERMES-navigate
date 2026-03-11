@@ -20,6 +20,8 @@
 #include "behaviortree_cpp/action_node.h"
 #include "behaviortree_cpp/bt_factory.h"
 #include "geometry_msgs/msg/pose_stamped.hpp"
+#include "rclcpp/logger.hpp"
+#include "rclcpp/logging.hpp"
 
 namespace hermes_navigate
 {
@@ -43,14 +45,18 @@ class ReturnToStartNode : public BT::SyncActionNode
 public:
   ReturnToStartNode(
     const std::string & name,
-    const BT::NodeConfig & config);
+    const BT::NodeConfig & config,
+    rclcpp::Logger logger);
 
   static BT::PortsList providedPorts();
 
   /// @brief Register this node type with the BT factory.
-  static void registerWithFactory(BT::BehaviorTreeFactory & factory);
+  static void registerWithFactory(BT::BehaviorTreeFactory & factory, rclcpp::Logger logger);
 
   BT::NodeStatus tick() override;
+
+private:
+  rclcpp::Logger logger_;
 };
 
 }  // namespace hermes_navigate
