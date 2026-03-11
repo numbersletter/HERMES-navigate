@@ -150,6 +150,16 @@ HermesNavigateNode::on_configure(const rclcpp_lifecycle::State &)
   blackboard_->set("blacklisted_goals",
     std::vector<geometry_msgs::msg::PoseStamped>{});  // grows as Nav2 fails
 
+  // Nav2 BT action/service nodes (e.g. NavigateToPoseAction) retrieve these
+  // entries from the blackboard in their constructors.  "node" must be a plain
+  // rclcpp::Node::SharedPtr — lifecycle nodes are not accepted.
+  bt_client_node_ = std::make_shared<rclcpp::Node>(
+    std::string(get_name()) + "_bt_client",
+    rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(true));
+  blackboard_->set("node",                    bt_client_node_);
+  blackboard_->set("bt_loop_duration",        std::chrono::milliseconds(10));
+  blackboard_->set("wait_for_service_timeout", std::chrono::milliseconds(1000));
+
   // ── Register BT nodes with this node as context ───────────────────────────
   rclcpp_lifecycle::LifecycleNode::WeakPtr self = shared_from_this();
   factory_.registerNodeType<nav2_behavior_tree::PipelineSequence>("PipelineSequence");
@@ -240,6 +250,7 @@ HermesNavigateNode::on_cleanup(const rclcpp_lifecycle::State &)
   stop_srv_.reset();
   tree_ = BT::Tree{};  // destroy tree (halts all running nodes)
   blackboard_.reset();
+  bt_client_node_.reset();
   tf_listener_.reset();
   tf_buffer_.reset();
   pose_sub_.reset();
