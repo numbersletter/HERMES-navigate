@@ -106,6 +106,13 @@
                         list; SelectFrontier will skip it on subsequent ticks.
                         Always returns SUCCESS so the pipeline can re-tick and
                         pick a different frontier.
+
+          NavOrBlacklist always returns SUCCESS (either nav succeeded or the
+          frontier was blacklisted).  The PipelineSequence therefore returns
+          SUCCESS once per navigation leg.  tickTree() detects this and keeps
+          the tick timer alive so the robot immediately selects the next
+          frontier.  The tree only truly terminates when SelectFrontier returns
+          FAILURE (exploration_done=true — no more viable frontiers).
         -->
         <Fallback name="NavOrBlacklist">
           <RetryUntilSuccessful num_attempts="3">
