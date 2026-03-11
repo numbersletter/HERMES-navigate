@@ -64,7 +64,8 @@ BT::NodeStatus BlacklistFrontierNode::tick()
   // Deduplicate: skip appending if an entry within 1 cm already exists.
   // This tiny radius is intentionally strict — it only guards against the
   // exact same numerical position being added twice (e.g., if the BT node is
-  // re-ticked on the same failed goal before the frontier list refreshes).
+  // re-ticked on the same goal before the frontier list refreshes, or when
+  // both the failure-path and the always-run step try to add the same pose).
   // Use the configurable blacklist_radius from SelectFrontierNode if broader
   // deduplication is needed.
   constexpr double kDupRadiusSq = 0.01 * 0.01;  // (1 cm)^2
@@ -79,9 +80,9 @@ BT::NodeStatus BlacklistFrontierNode::tick()
     }
   }
 
-  // Append the failed frontier and write the updated list back.
-  RCLCPP_WARN(logger_,
-    "BlacklistFrontierNode: blacklisting frontier at (%.2f, %.2f) "
+  // Append the frontier and write the updated list back.
+  RCLCPP_INFO(logger_,
+    "BlacklistFrontierNode: marking frontier at (%.2f, %.2f) as visited "
     "[blacklist now has %zu entries].",
     new_goal.pose.position.x, new_goal.pose.position.y,
     blacklist.size() + 1);
