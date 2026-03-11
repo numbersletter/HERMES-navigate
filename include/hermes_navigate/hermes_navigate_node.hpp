@@ -66,6 +66,7 @@ namespace hermes_navigate
  *   robot_pose_topic      (string) — Topic for the current robot pose
  *                                    (default "/robot_pose").
  *   nav2_server_timeout_s (double) — Seconds to wait for Nav2 action server
+ *                                    and for bt_navigator to become active
  *                                    during configure (default 60.0).
  */
 class HermesNavigateNode : public rclcpp_lifecycle::LifecycleNode

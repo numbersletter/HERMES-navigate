@@ -21,6 +21,8 @@
 #include <vector>
 
 #include "ament_index_cpp/get_package_share_directory.hpp"
+#include "lifecycle_msgs/msg/state.hpp"
+#include "lifecycle_msgs/srv/get_state.hpp"
 #include "nav2_behavior_tree/plugins/action/navigate_to_pose_action.hpp"
 #include "nav2_msgs/action/navigate_to_pose.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
@@ -100,6 +102,76 @@ HermesNavigateNode::on_configure(const rclcpp_lifecycle::State &)
   }
 
   RCLCPP_INFO(get_logger(), "HermesNavigateNode: navigate_to_pose server is ready.");
+
+  // ── Wait for bt_navigator to be fully active ──────────────────────────────
+  // wait_for_action_server() returns true as soon as bt_navigator registers
+  // its action server (during its own configure phase).  However, the server
+  // only accepts goals once bt_navigator has been *activated* by the Nav2
+  // lifecycle manager.  We use a dedicated helper node so we can spin its
+  // executor independently without deadlocking the HERMES lifecycle executor.
+  {
+    auto helper_node = std::make_shared<rclcpp::Node>(
+      std::string(get_name()) + "_nav2_wait_helper");
+
+    auto get_state_client =
+      helper_node->create_client<lifecycle_msgs::srv::GetState>(
+        "/bt_navigator/get_state");
+
+    const auto deadline =
+      helper_node->now() + rclcpp::Duration::from_seconds(nav2_server_timeout_s_);
+
+    RCLCPP_INFO(get_logger(),
+      "HermesNavigateNode: waiting for bt_navigator to become active…");
+
+    bool bt_nav_active = false;
+    while (rclcpp::ok() && helper_node->now() < deadline) {
+      // Cap each wait to the remaining budget so we don't overshoot the deadline.
+      const auto remaining_ns = std::chrono::nanoseconds(
+        (deadline - helper_node->now()).nanoseconds());
+      const auto cap_1s = std::chrono::nanoseconds(std::chrono::seconds(1));
+      const auto wait_timeout = std::min(remaining_ns, cap_1s);
+
+      // Wait up to 1 s (or remaining budget) for the GetState service to appear.
+      if (!get_state_client->wait_for_service(wait_timeout)) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+          "HermesNavigateNode: /bt_navigator/get_state service not yet available.");
+        continue;
+      }
+
+      auto req = std::make_shared<lifecycle_msgs::srv::GetState::Request>();
+      auto future = get_state_client->async_send_request(req);
+
+      // Spin helper_node's executor to drive the response — this does NOT
+      // involve the HERMES lifecycle executor, so there is no deadlock risk.
+      const auto spin_timeout = std::min(
+        std::chrono::nanoseconds((deadline - helper_node->now()).nanoseconds()),
+        cap_1s);
+      if (rclcpp::spin_until_future_complete(helper_node, future, spin_timeout)
+          == rclcpp::FutureReturnCode::SUCCESS)
+      {
+        if (future.get()->current_state.id ==
+            lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE)
+        {
+          bt_nav_active = true;
+          break;
+        }
+      }
+
+      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 1000,
+        "HermesNavigateNode: bt_navigator not yet active; retrying…");
+      rclcpp::sleep_for(std::chrono::milliseconds(200));
+    }
+
+    if (!bt_nav_active) {
+      RCLCPP_ERROR(get_logger(),
+        "HermesNavigateNode: bt_navigator did not become active within %.0f s. "
+        "Ensure Nav2 is fully started before activating HERMES-navigate.",
+        nav2_server_timeout_s_);
+      return CallbackReturn::FAILURE;
+    }
+
+    RCLCPP_INFO(get_logger(), "HermesNavigateNode: bt_navigator is active.");
+  }
 
   // ── TF listener ──────────────────────────────────────────────────────────
   tf_buffer_   = std::make_shared<tf2_ros::Buffer>(get_clock());
