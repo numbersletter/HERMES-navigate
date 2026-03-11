@@ -408,7 +408,11 @@ void HermesNavigateNode::tickTree()
       // (exploration_done=true) or an unexpected error occurred.  Either way,
       // stop ticking.
       bool exploration_done = false;
-      blackboard_->get("exploration_done", exploration_done);
+      if (!blackboard_->get("exploration_done", exploration_done)) {
+        RCLCPP_WARN(get_logger(),
+          "HermesNavigateNode: 'exploration_done' key missing from blackboard; "
+          "assuming false.");
+      }
       RCLCPP_INFO(get_logger(),
         "HermesNavigateNode: BT finished with status FAILURE "
         "(exploration_done=%s). Stopping tick timer.",
