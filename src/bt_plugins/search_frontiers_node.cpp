@@ -98,6 +98,11 @@ BT::NodeStatus SearchFrontiersNode::tick()
   std::vector<Frontier> frontiers =
     frontier_plugin_->searchFrontiers(*latest_costmap_, robot_pose);
 
+  if (node) {
+    RCLCPP_DEBUG(node->get_logger(),
+      "SearchFrontiersNode: found %zu frontier(s).", frontiers.size());
+  }
+
   setOutput("frontiers", frontiers);
 
   publishMarkers(frontiers);
