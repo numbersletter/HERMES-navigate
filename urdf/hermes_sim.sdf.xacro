@@ -4,14 +4,14 @@
 
     <!-- Define robot constants -->
     <xacro:property name="base_width" value="0.1143"/>
-    <xacro:property name="base_length" value="0.1143"/>
+    <xacro:property name="base_length" value="0.14"/>
     <xacro:property name="base_height" value="0.0762"/>
 
     <xacro:property name="wheel_radius" value="0.03302"/>
     <xacro:property name="wheel_width" value="0.01778"/>
     <xacro:property name="wheel_ygap" value="0.01"/>
     <xacro:property name="wheel_zoff" value="0.01778"/>
-    <xacro:property name="wheel_xoff" value="0.03"/>
+    <xacro:property name="wheel_xoff" value="0.035"/>
 
     <xacro:property name="caster_xoff" value="0.04"/>
 
@@ -204,6 +204,15 @@
 
       <!-- input -->
       <topic>/demo/cmd_vel</topic>
+
+      <!-- odometry output -->
+      <odom_topic>/model/hermes/odometry</odom_topic>
+      <odom_publish_frequency>30</odom_publish_frequency>
+      <frame_id>odom</frame_id>
+      <child_frame_id>base_link</child_frame_id>
+
+      <!-- Disable TF publishing — robot_localization EKF publishes odom→base_link -->
+      <tf_topic></tf_topic>
     </plugin>
 
     <plugin

@@ -38,3 +38,10 @@
   gz_type_name: "gz.msgs.Model"
   direction: GZ_TO_ROS
 
+# Diff-drive odometry: Gazebo → ROS 2
+- ros_topic_name: "/diff_drive/odom"
+  gz_topic_name: "/model/hermes/odometry"
+  ros_type_name: "nav_msgs/msg/Odometry"
+  gz_type_name: "gz.msgs.Odometry"
+  direction: GZ_TO_ROS
+

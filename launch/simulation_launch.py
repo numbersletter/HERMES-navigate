@@ -82,6 +82,8 @@ def generate_launch_description():
                                    "slam_toolbox_params.yaml")
     nav2_params     = os.path.join(pkg_hermes_navigate, "config",
                                    "sim_nav2_params.yaml")
+    ekf_params      = os.path.join(pkg_hermes_navigate, "config",
+                                   "ekf.yaml")
     plugin_params   = os.path.join(pkg_hermes_navigate, "params",
                                    "plugin_params.yaml")
     explore_bt      = os.path.join(pkg_hermes_navigate, "behavior_trees",
@@ -187,6 +189,17 @@ def generate_launch_description():
         }.items(),
     )
 
+    # ── 5b. robot_localization EKF (odom → base_link) ─────────────────────────
+    #   Fuses diff-drive wheel odometry + rf2o laser odometry into a single
+    #   smooth /odometry/filtered and publishes the odom → base_link TF.
+    ekf_node = Node(
+        package="robot_localization",
+        executable="ekf_node",
+        name="ekf_filter_node",
+        output="screen",
+        parameters=[ekf_params],
+    )
+
     # ── 6. Nav2 (navigation stack) ────────────────────────────────────────────
     #   Nav2 handles NavigateToPose requests from hermes_navigate_node.
     #   It uses its built-in navigate_to_pose BT for each individual navigation
@@ -253,6 +266,9 @@ def generate_launch_description():
 
         # Autonomy stack
         slam_toolbox,
+        ekf_node,
         nav2_bringup,
+        hermes_navigate,
+        lifecycle_manager,
         LogInfo(msg="HERMES simulation ready — all nodes launched."),
     ])

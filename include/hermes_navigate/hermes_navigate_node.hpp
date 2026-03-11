@@ -95,6 +95,10 @@ private:
   BT::Tree tree_;
   BT::Blackboard::Ptr blackboard_;
 
+  /// @brief Dedicated plain rclcpp::Node used by nav2 BT action nodes as their
+  ///        ROS context (stored on the blackboard under the key "node").
+  rclcpp::Node::SharedPtr bt_client_node_;
+
   /// @brief Load and build the BT tree from the configured XML file.
   bool loadBehaviorTree(const std::string & bt_xml_path);
 

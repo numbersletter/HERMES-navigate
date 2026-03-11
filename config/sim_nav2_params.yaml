@@ -11,7 +11,12 @@ bt_navigator:
     use_sim_time: true
     global_frame: map
     robot_base_frame: base_link
-    odom_topic: /odom
+    odom_topic: /odometry/filtered
+# diff_drive + rf2o_laser → EKF → /odometry/filtered + odom→base_link TF → Nav2
+    
+    error_code_names:
+      - compute_path_error_code
+      - follow_path_error_code
 
 # ── Planner Server (Smac 2D) ──────────────────────────────────────────────────
 planner_server:
@@ -90,7 +95,7 @@ controller_server:
       TrajectoryValidator:
         plugin: "mppi::DefaultOptimalTrajectoryValidator"
         collision_lookahead_time: 2.0
-        consider_footprint: true
+        consider_footprint: false
       critics: ["ConstraintCritic", "CostCritic", "GoalCritic", "GoalAngleCritic", "PathAlignCritic", "PathFollowCritic", "PathAngleCritic", "PreferForwardCritic"]
       ConstraintCritic:
         enabled: true
@@ -116,7 +121,7 @@ controller_server:
         cost_power: 1
         cost_weight: 3.81
         critical_cost: 260.0
-        consider_footprint: true
+        consider_footprint: false
         collision_cost: 1000000.0
         near_goal_distance: 0.5
         trajectory_point_step: 2
@@ -179,7 +184,7 @@ behavior_server:
     local_frame: odom
     global_frame: map
     robot_base_frame: base_link
-    transform_tolerance: 0.1
+    transform_tolerance: 0.3
     simulate_ahead_time: 2.0
     max_rotational_vel: 0.8
     min_rotational_vel: 0.4
@@ -190,14 +195,16 @@ global_costmap:
   global_costmap:
     ros__parameters:
       use_sim_time: true
-      update_frequency: 5.0
-      publish_frequency: 2.0
+      update_frequency: 10.0
+      publish_frequency: 10.0
+      transform_tolerance: 0.5
       global_frame: map
       robot_base_frame: base_link
       # Footprint from urdf/hermes_sim.sdf.xacro geometry:
       # base: 0.1143 x 0.1143 m, wheels protrude laterally/rearward.
       resolution: 0.025
-      footprint: "[[0.0572, 0.0572], [0.0030, 0.0760], [-0.0630, 0.0760], [-0.0630, -0.0760], [0.0030, -0.0760], [0.0572, -0.0572]]"
+      robot_radius: 0.088
+    # footprint: "[[0.0572, 0.0572], [0.0030, 0.0760], [-0.0630, 0.0760], [-0.0630, -0.0760], [0.0030, -0.0760], [0.0572, -0.0572]]"
       track_unknown_space: true
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
       static_layer:
@@ -232,11 +239,13 @@ local_costmap:
       publish_frequency: 10.0
       global_frame: odom
       robot_base_frame: base_link
+      transform_tolerance: 0.5
       rolling_window: true
       width: 3
       height: 3
       resolution: 0.025
-      footprint: "[[0.0572, 0.0572], [0.0030, 0.0760], [-0.0630, 0.0760], [-0.0630, -0.0760], [0.0030, -0.0760], [0.0572, -0.0572]]"
+      robot_radius: 0.088
+    # footprint: "[[0.0572, 0.0572], [0.0030, 0.0760], [-0.0630, 0.0760], [-0.0630, -0.0760], [0.0030, -0.0760], [0.0572, -0.0572]]"
       plugins: ["obstacle_layer", "inflation_layer"]
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
@@ -287,7 +296,7 @@ velocity_smoother:
     min_velocity: [-0.35, 0.0, -1.9]
     max_accel: [3.0, 0.0, 3.5]
     max_decel: [-3.0, 0.0, -3.5]
-    odom_topic: "odom"
+    odom_topic: "/odometry/filtered"
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]
     velocity_timeout: 1.0
