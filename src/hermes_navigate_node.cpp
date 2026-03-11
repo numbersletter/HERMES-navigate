@@ -402,9 +402,21 @@ void HermesNavigateNode::tickTree()
     BT::NodeStatus status = tree_.tickOnce();
 
     if (status == BT::NodeStatus::SUCCESS || status == BT::NodeStatus::FAILURE) {
-      RCLCPP_INFO(get_logger(),
-        "HermesNavigateNode: BT finished with status %s. Stopping tick timer.",
-        status == BT::NodeStatus::SUCCESS ? "SUCCESS" : "FAILURE");
+      // Check whether the tree stopped because exploration is complete (no more
+      // viable frontiers) rather than due to an unexpected error or a successful
+      // return-to-start.
+      bool exploration_done = false;
+      blackboard_->get("exploration_done", exploration_done);
+
+      if (exploration_done) {
+        RCLCPP_INFO(get_logger(),
+          "HermesNavigateNode: Exploration complete — no viable frontiers remain. "
+          "Robot is holding position. Call ~/stop to return to start.");
+      } else {
+        RCLCPP_INFO(get_logger(),
+          "HermesNavigateNode: BT finished with status %s. Stopping tick timer.",
+          status == BT::NodeStatus::SUCCESS ? "SUCCESS" : "FAILURE");
+      }
       tick_timer_->cancel();
     }
   } catch (const std::exception & e) {

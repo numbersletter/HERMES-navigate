@@ -118,7 +118,12 @@ BT::NodeStatus SelectFrontierNode::tick()
   if (!best) {
     setOutput("exploration_done", true);
     has_active_goal_ = false;
-    return BT::NodeStatus::SUCCESS;  // exploration done
+    // Return FAILURE so the PipelineSequence halts the navigation step.
+    // This prevents the robot from continuing to navigate to an old goal when
+    // there are no remaining viable frontiers.  The tick timer is subsequently
+    // cancelled by HermesNavigateNode::tickTree(); the ~/stop service can
+    // then be used to trigger return-to-start.
+    return BT::NodeStatus::FAILURE;
   }
 
   setOutput("exploration_done", false);
