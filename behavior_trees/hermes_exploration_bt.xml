@@ -27,7 +27,10 @@
   │         │       SearchFrontiers   ← WavefrontFrontierDetector plugin
   │         │       AssignCosts       ← InformationGainPlugin + EuclideanPlugin
   │         │       SelectFrontier    ← hysteresis selection, skips blacklist;
-  │         │                            writes nav_goal directly to blackboard
+  │         │                            writes nav_goal directly to blackboard;
+  │         │                            returns FAILURE when no viable frontiers
+  │         │                            remain (halts pipeline, stops robot;
+  │         │                            call ~/stop to trigger return-to-start)
   │         └─ Fallback (NavOrBlacklist)
   │               RetryUntilSuccessful(num_attempts=3)
   │                 NavigateToPose(nav_goal)  ← Nav2 built-in; 3 attempts
@@ -36,7 +39,9 @@
   Blackboard entries (written by HermesNavigateNode before the first tick):
     start_pose        (geometry_msgs/PoseStamped) — captured at configure
     return_to_start   (bool)                      — true when ~/stop is called
-    exploration_done  (bool)                      — set by SelectFrontier
+    exploration_done  (bool)                      — set true by SelectFrontier when
+                                                       no viable frontiers remain;
+                                                       causes BT FAILURE and stops robot
     robot_pose        (geometry_msgs/PoseStamped) — updated every tick
     nav_goal          (geometry_msgs/PoseStamped) — written by SelectFrontier
                                                     or ReturnToStart
@@ -86,7 +91,10 @@
 
             <!-- 3. Select best non-blacklisted frontier (with hysteresis).
                  Writes the chosen pose directly to nav_goal so the downstream
-                 NavigateToPose node (Nav2 built-in) can navigate there. -->
+                 NavigateToPose node (Nav2 built-in) can navigate there.
+                 Returns FAILURE (and sets exploration_done=true) when no viable
+                 frontier exists, causing the PipelineSequence to halt navigation
+                 and the robot to hold position.  Call ~/stop to return home. -->
             <SelectFrontier
               scored_frontiers="{scored_frontiers}"
               robot_pose="{robot_pose}"
