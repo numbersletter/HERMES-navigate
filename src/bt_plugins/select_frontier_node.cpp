@@ -118,7 +118,7 @@ BT::NodeStatus SelectFrontierNode::tick()
   if (!best) {
     setOutput("exploration_done", true);
     has_active_goal_ = false;
-    return BT::NodeStatus::SUCCESS;  // exploration done
+    return BT::NodeStatus::FAILURE;  // no viable frontier — signal exploration complete
   }
 
   setOutput("exploration_done", false);

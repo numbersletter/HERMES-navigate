@@ -401,11 +401,30 @@ void HermesNavigateNode::tickTree()
   try {
     BT::NodeStatus status = tree_.tickOnce();
 
-    if (status == BT::NodeStatus::SUCCESS || status == BT::NodeStatus::FAILURE) {
+    if (status == BT::NodeStatus::FAILURE) {
+      // FAILURE during exploration means SelectFrontier found no viable frontier
+      // (exploration_done=true) or an unexpected error occurred.  Either way,
+      // stop ticking.
       RCLCPP_INFO(get_logger(),
-        "HermesNavigateNode: BT finished with status %s. Stopping tick timer.",
-        status == BT::NodeStatus::SUCCESS ? "SUCCESS" : "FAILURE");
+        "HermesNavigateNode: BT finished with status FAILURE. Stopping tick timer.");
       tick_timer_->cancel();
+    } else if (status == BT::NodeStatus::SUCCESS) {
+      // SUCCESS during the return-to-start branch means the robot has reached
+      // its start pose — stop ticking.  SUCCESS during normal exploration just
+      // means one navigation leg finished; keep the timer running so the robot
+      // immediately selects and navigates to the next frontier.
+      bool return_to_start = false;
+      if (!blackboard_->get("return_to_start", return_to_start)) {
+        RCLCPP_WARN(get_logger(),
+          "HermesNavigateNode: 'return_to_start' key missing from blackboard; "
+          "treating as false (continue exploration).");
+      }
+      if (return_to_start) {
+        RCLCPP_INFO(get_logger(),
+          "HermesNavigateNode: BT finished with status SUCCESS (returned to start). "
+          "Stopping tick timer.");
+        tick_timer_->cancel();
+      }
     }
   } catch (const std::exception & e) {
     RCLCPP_ERROR(get_logger(), "HermesNavigateNode: BT tick threw: %s", e.what());
