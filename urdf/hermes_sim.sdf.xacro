@@ -240,7 +240,7 @@
 
       <xacro:cylinder_inertia m="0.125" r="0.021" h="0.02032"/>
 
-      <sensor name="lidar" type="gpu_lidar">
+      <sensor name="lidar" type="lidar">
         <always_on>true</always_on>
         <visualize>true</visualize>
         <update_rate>10</update_rate>
