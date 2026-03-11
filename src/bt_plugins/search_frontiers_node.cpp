@@ -79,8 +79,9 @@ BT::PortsList SearchFrontiersNode::providedPorts()
 
 BT::NodeStatus SearchFrontiersNode::tick()
 {
+  auto node = parent_.lock();
+
   if (!latest_costmap_) {
-    auto node = parent_.lock();
     if (node) {
       RCLCPP_WARN(node->get_logger(),
         "SearchFrontiersNode: waiting for global costmap.");

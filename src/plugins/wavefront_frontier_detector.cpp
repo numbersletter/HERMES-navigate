@@ -132,11 +132,48 @@ std::vector<std::pair<int, int>> WavefrontFrontierDetector::detectFrontierCells(
   std::vector<bool> visited(static_cast<std::size_t>(width * height), false);
   std::queue<std::pair<int, int>> q;
 
-  if (data[static_cast<std::size_t>(idx(robot_gx, robot_gy))] != UNKNOWN &&
-    data[static_cast<std::size_t>(idx(robot_gx, robot_gy))] < LETHAL)
+  // Seed the BFS from the robot's cell if it is free.  If the robot's cell is
+  // UNKNOWN or LETHAL (e.g. immediately after a costmap resize when new cells
+  // have not yet been filled in by the static layer), search an expanding
+  // square ring of up to MAX_SEED_SEARCH_RADIUS cells around the robot to
+  // find the nearest free seed cell.  A square ring is used (only the border
+  // of each r×r square is visited) to avoid re-checking interior cells while
+  // still covering all eight compass directions at each radius step.
+  // This prevents a transient UNKNOWN cell from producing zero frontiers and
+  // prematurely terminating exploration.
+  constexpr int MAX_SEED_SEARCH_RADIUS = 5;
   {
-    q.push({robot_gx, robot_gy});
-    visited[static_cast<std::size_t>(idx(robot_gx, robot_gy))] = true;
+    int seed_gx = robot_gx, seed_gy = robot_gy;
+    bool seed_found = false;
+    for (int r = 0; r <= MAX_SEED_SEARCH_RADIUS && !seed_found; ++r) {
+      for (int ddy = -r; ddy <= r && !seed_found; ++ddy) {
+        for (int ddx = -r; ddx <= r && !seed_found; ++ddx) {
+          // On the first iteration (r==0) visit the centre; on subsequent
+          // iterations visit only the outer ring to avoid re-checking cells.
+          if (r > 0 && std::abs(ddx) != r && std::abs(ddy) != r) {
+            continue;
+          }
+          int nx = robot_gx + ddx, ny = robot_gy + ddy;
+          if (inBounds(nx, ny) &&
+            data[static_cast<std::size_t>(idx(nx, ny))] != UNKNOWN &&
+            data[static_cast<std::size_t>(idx(nx, ny))] < LETHAL)
+          {
+            seed_gx = nx;
+            seed_gy = ny;
+            seed_found = true;
+          }
+        }
+      }
+    }
+    if (seed_found) {
+      q.push({seed_gx, seed_gy});
+      visited[static_cast<std::size_t>(idx(seed_gx, seed_gy))] = true;
+    } else {
+      RCLCPP_WARN(logger_,
+        "WavefrontFrontierDetector: robot cell and all neighbours "
+        "(radius %d) are UNKNOWN or LETHAL — skipping frontier search this tick.",
+        MAX_SEED_SEARCH_RADIUS);
+    }
   }
 
   std::vector<std::pair<int, int>> frontier_cells;
