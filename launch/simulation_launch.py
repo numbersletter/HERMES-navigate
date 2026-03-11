@@ -73,7 +73,7 @@ def generate_launch_description():
 
     # ── Paths to key files ────────────────────────────────────────────────────
     default_world   = os.path.join(pkg_hermes_navigate, "worlds",
-                                   "hermes_world.sdf")
+                                   "workshop_world.sdf")
     sdf_xacro_file  = os.path.join(pkg_hermes_navigate, "urdf",
                                    "hermes_sim.sdf.xacro")
     bridge_params   = os.path.join(pkg_hermes_navigate, "config",
