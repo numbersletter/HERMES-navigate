@@ -65,8 +65,14 @@ BT::PortsList SelectFrontierNode::providedPorts()
 
 BT::NodeStatus SelectFrontierNode::tick()
 {
+  auto node = parent_.lock();
+
   auto scored_res = getInput<std::vector<ScoredFrontier>>("scored_frontiers");
   if (!scored_res) {
+    if (node) {
+      RCLCPP_WARN(node->get_logger(),
+        "SelectFrontierNode: no scored_frontiers port value — setting exploration_done=true.");
+    }
     setOutput("exploration_done", true);
     return BT::NodeStatus::FAILURE;
   }
@@ -102,20 +108,35 @@ BT::NodeStatus SelectFrontierNode::tick()
   // If the currently tracked goal was blacklisted, reset hysteresis so a fresh
   // frontier can be selected on this tick.
   if (has_active_goal_ && is_blacklisted(active_goal_)) {
+    if (node) {
+      RCLCPP_INFO(node->get_logger(),
+        "SelectFrontierNode: active goal (%.2f, %.2f) is now blacklisted — resetting hysteresis.",
+        active_goal_.pose.position.x, active_goal_.pose.position.y);
+    }
     has_active_goal_ = false;
   }
 
   // Find the best viable (above-threshold, non-blacklisted) frontier.
   const ScoredFrontier * best = nullptr;
+  std::size_t n_below_threshold = 0;
+  std::size_t n_blacklisted = 0;
   for (const auto & sf : scored) {
-    if (sf.score >= min_frontier_score_ && !is_blacklisted(sf.frontier.goal_pose)) {
-      if (!best || sf.score > best->score) {
-        best = &sf;
-      }
+    if (sf.score < min_frontier_score_) {
+      ++n_below_threshold;
+    } else if (is_blacklisted(sf.frontier.goal_pose)) {
+      ++n_blacklisted;
+    } else if (!best || sf.score > best->score) {
+      best = &sf;
     }
   }
 
   if (!best) {
+    if (node) {
+      RCLCPP_WARN(node->get_logger(),
+        "SelectFrontierNode: no viable frontier found "
+        "(total=%zu, below_threshold=%zu, blacklisted=%zu) — setting exploration_done=true.",
+        scored.size(), n_below_threshold, n_blacklisted);
+    }
     setOutput("exploration_done", true);
     has_active_goal_ = false;
     return BT::NodeStatus::FAILURE;  // no viable frontier — signal exploration complete
@@ -127,15 +148,35 @@ BT::NodeStatus SelectFrontierNode::tick()
   if (has_active_goal_) {
     double required_score = active_goal_score_ * (1.0 + hysteresis_factor_);
     if (best->score < required_score) {
+      if (node) {
+        RCLCPP_DEBUG(node->get_logger(),
+          "SelectFrontierNode: hysteresis — keeping current goal (%.2f, %.2f) "
+          "[score=%.1f, best_score=%.1f, required=%.1f].",
+          active_goal_.pose.position.x, active_goal_.pose.position.y,
+          active_goal_score_, best->score, required_score);
+      }
       setOutput("nav_goal", active_goal_);
       return BT::NodeStatus::SUCCESS;
     }
   }
 
   // Accept new goal
+  const bool goal_changed =
+    !has_active_goal_ ||
+    active_goal_.pose.position.x != best->frontier.goal_pose.pose.position.x ||
+    active_goal_.pose.position.y != best->frontier.goal_pose.pose.position.y;
+
   has_active_goal_   = true;
   active_goal_       = best->frontier.goal_pose;
   active_goal_score_ = best->score;
+
+  if (node && goal_changed) {
+    RCLCPP_INFO(node->get_logger(),
+      "SelectFrontierNode: new nav_goal selected → (%.2f, %.2f) [score=%.1f, "
+      "total_frontiers=%zu, blacklisted=%zu].",
+      active_goal_.pose.position.x, active_goal_.pose.position.y,
+      active_goal_score_, scored.size(), n_blacklisted);
+  }
 
   setOutput("nav_goal", active_goal_);
   return BT::NodeStatus::SUCCESS;

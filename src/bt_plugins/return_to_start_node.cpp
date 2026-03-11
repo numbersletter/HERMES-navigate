@@ -14,6 +14,8 @@
 
 #include "hermes_navigate/bt_plugins/return_to_start_node.hpp"
 
+#include "rclcpp/rclcpp.hpp"
+
 namespace hermes_navigate
 {
 
@@ -21,8 +23,10 @@ namespace hermes_navigate
 
 ReturnToStartNode::ReturnToStartNode(
   const std::string & name,
-  const BT::NodeConfig & config)
-: BT::SyncActionNode(name, config)
+  const BT::NodeConfig & config,
+  rclcpp::Logger logger)
+: BT::SyncActionNode(name, config),
+  logger_(logger)
 {
 }
 
@@ -48,15 +52,25 @@ BT::NodeStatus ReturnToStartNode::tick()
   // Write the start pose as the navigation goal.  The NavigateToPose BT node
   // in the same branch reads {nav_goal} and calls the navigate_to_pose action
   // server; Nav2 plans the path autonomously.
-  setOutput("goal", start_pose_res.value());
+  const auto & start_pose = start_pose_res.value();
+  RCLCPP_INFO(logger_,
+    "ReturnToStartNode: setting nav_goal to start pose at (%.2f, %.2f).",
+    start_pose.pose.position.x, start_pose.pose.position.y);
+  setOutput("goal", start_pose);
   return BT::NodeStatus::SUCCESS;
 }
 
 // ─── Factory registration ─────────────────────────────────────────────────────
 
-void ReturnToStartNode::registerWithFactory(BT::BehaviorTreeFactory & factory)
+void ReturnToStartNode::registerWithFactory(
+  BT::BehaviorTreeFactory & factory,
+  rclcpp::Logger logger)
 {
-  factory.registerNodeType<ReturnToStartNode>("ReturnToStart");
+  factory.registerBuilder<ReturnToStartNode>(
+    "ReturnToStart",
+    [logger](const std::string & name, const BT::NodeConfig & config) {
+      return std::make_unique<ReturnToStartNode>(name, config, logger);
+    });
 }
 
 }  // namespace hermes_navigate
