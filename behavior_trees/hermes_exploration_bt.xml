@@ -8,32 +8,45 @@
     CONFIGURED  → Tree is loaded but NOT ticked. Robot is stationary.
     ACTIVE      → Tick timer starts. Exploration branch runs.
     DEACTIVATED → Tick timer stops; tree is halted (paused). Robot stays put.
-    ~/stop srv  → Sets return_to_start=true and restarts tick timer so the
-                   ReturnBranch executes; ReturnToStart sets nav_goal to the
-                   recorded start pose and Nav2's NavigateToPose drives the
-                   robot home.
+    ~/stop srv  → Sets return_to_start=true. The ReactiveFallback re-evaluates
+                   the ReturnBranch on the very next tick, immediately halting
+                   exploration. ReturnToStart sets nav_goal to the recorded
+                   start pose and Nav2's NavigateToPose drives the robot home.
 
-  Tree structure (top-level Fallback):
-  ┌─ Fallback (MainFallback)
+  Tree structure (top-level ReactiveFallback):
+  ┌─ ReactiveFallback (MainFallback)
+  │   │
+  │   │   Re-evaluates child 1 (ReturnBranch) from the top on EVERY tick.
+  │   │   During exploration ReturnBranch fails and the fallback falls through
+  │   │   to child 2. The moment ~/stop sets return_to_start=true the condition
+  │   │   succeeds, exploration is halted, and the robot navigates home.
   │   │
   │   ├─ [Return branch]  Sequence
   │   │     ReturnToStartCondition(return_to_start)
   │   │     ReturnToStart(start_pose → nav_goal)  ← sets goal, no navigation
   │   │     NavigateToPose(nav_goal)              ← Nav2 built-in; plans path
   │   │
-  │   └─ [Exploration branch]  PipelineSequence
-  │         ├─ RateController(1 Hz)
-  │         │     Sequence
-  │         │       SearchFrontiers   ← WavefrontFrontierDetector plugin
-  │         │       AssignCosts       ← InformationGainPlugin + EuclideanPlugin
-  │         │       SelectFrontier    ← hysteresis selection, skips blacklist;
-  │         │                            writes nav_goal directly to blackboard
-  │         └─ ForceSuccess (NavAndMark)
-  │               Fallback
-  │                 RetryUntilSuccessful(num_attempts=3)
-  │                   NavigateToPose(nav_goal)  ← Nav2 built-in; 3 attempts
-  │                 BlacklistFrontier(nav_goal) ← ONLY on failure: marks frontier
-  │                                               unreachable so it is skipped
+  │   └─ KeepRunningUntilFailure
+  │         │
+  │         │   Converts a PipelineSequence SUCCESS (one navigation leg finished)
+  │         │   into RUNNING so the tree never terminates between legs. The tree
+  │         │   stays alive and naturally ticks the RateController again, which
+  │         │   triggers a fresh frontier selection. The tree only terminates
+  │         │   (FAILURE) when SelectFrontier sets exploration_done=true.
+  │         │
+  │         └─ [Exploration branch]  PipelineSequence
+  │               ├─ RateController(1 Hz)
+  │               │     Sequence
+  │               │       SearchFrontiers   ← WavefrontFrontierDetector plugin
+  │               │       AssignCosts       ← InformationGainPlugin + EuclideanPlugin
+  │               │       SelectFrontier    ← hysteresis selection, skips blacklist;
+  │               │                            writes nav_goal directly to blackboard
+  │               └─ ForceSuccess (NavAndMark)
+  │                     Fallback
+  │                       RetryUntilSuccessful(num_attempts=3)
+  │                         NavigateToPose(nav_goal)  ← Nav2 built-in; 3 attempts
+  │                       BlacklistFrontier(nav_goal) ← ONLY on failure: marks frontier
+  │                                                      unreachable so it is skipped
 
   Blackboard entries (written by HermesNavigateNode before the first tick):
     start_pose        (geometry_msgs/PoseStamped) — captured at configure
@@ -51,11 +64,17 @@
   <BehaviorTree ID="HermesExplorationBT">
 
     <!--
-      Top-level Fallback: the return-to-start branch is tried first every tick.
-      If return_to_start is false the condition immediately fails and the
-      exploration pipeline runs instead.
+      Top-level ReactiveFallback: re-evaluates child 1 (ReturnBranch) from the
+      top on EVERY tick. During exploration ReturnBranch fails (condition false)
+      and the fallback falls through to the KeepRunningUntilFailure exploration
+      branch. The moment ~/stop sets return_to_start=true, the condition
+      succeeds on the next tick, the exploration child is halted, and the robot
+      navigates home. Exploration itself never returns SUCCESS to this node
+      (KeepRunningUntilFailure converts each successful navigation leg to
+      RUNNING), so the tree only terminates when SelectFrontier declares
+      exploration_done (FAILURE) or the return journey is complete (SUCCESS).
     -->
-    <Fallback name="MainFallback">
+    <ReactiveFallback name="MainFallback">
 
       <!-- ─── Return-to-Start branch ───────────────────────────────────────
            Fires when the ~/stop service sets return_to_start=true.
@@ -70,80 +89,82 @@
       </Sequence>
 
       <!-- ─── Exploration pipeline ─────────────────────────────────────── -->
-      <PipelineSequence name="ExplorationPipeline">
+      <!-- KeepRunningUntilFailure converts a successful navigation leg (PipelineSequence
+           returns SUCCESS) into RUNNING, so the tree never terminates prematurely.
+           The tree stays alive and ticks the RateController again, which triggers
+           a fresh frontier selection. Exploration terminates (FAILURE) only when
+           SelectFrontier sets exploration_done=true and returns FAILURE. -->
+      <KeepRunningUntilFailure>
+        <PipelineSequence name="ExplorationPipeline">
 
-        <!-- Rate-limited frontier search + scoring + goal selection ──────── -->
-        <RateController hz="1.0">
-          <Sequence>
+          <!-- Rate-limited frontier search + scoring + goal selection ──────── -->
+          <RateController hz="1.0">
+            <Sequence>
 
-            <!-- 1. Search for frontier clusters (incremental wavefront BFS) -->
-            <SearchFrontiers
-              robot_pose="{robot_pose}"
-              frontiers="{frontiers}"/>
+              <!-- 1. Search for frontier clusters (incremental wavefront BFS) -->
+              <SearchFrontiers
+                robot_pose="{robot_pose}"
+                frontiers="{frontiers}"/>
 
-            <!-- 2. Score each frontier using InformationGain + Euclidean -->
-            <AssignCosts
-              frontiers="{frontiers}"
-              robot_pose="{robot_pose}"
-              scored_frontiers="{scored_frontiers}"/>
+              <!-- 2. Score each frontier using InformationGain + Euclidean -->
+              <AssignCosts
+                frontiers="{frontiers}"
+                robot_pose="{robot_pose}"
+                scored_frontiers="{scored_frontiers}"/>
 
-            <!-- 3. Select best non-blacklisted frontier (with hysteresis).
-                 Writes the chosen pose directly to nav_goal so the downstream
-                 NavigateToPose node (Nav2 built-in) can navigate there. -->
-            <SelectFrontier
-              scored_frontiers="{scored_frontiers}"
-              robot_pose="{robot_pose}"
-              blacklisted_goals="{blacklisted_goals}"
-              nav_goal="{nav_goal}"
-              exploration_done="{exploration_done}"/>
+              <!-- 3. Select best non-blacklisted frontier (with hysteresis).
+                   Writes the chosen pose directly to nav_goal so the downstream
+                   NavigateToPose node (Nav2 built-in) can navigate there. -->
+              <SelectFrontier
+                scored_frontiers="{scored_frontiers}"
+                robot_pose="{robot_pose}"
+                blacklisted_goals="{blacklisted_goals}"
+                nav_goal="{nav_goal}"
+                exploration_done="{exploration_done}"/>
 
-          </Sequence>
-        </RateController>
+            </Sequence>
+          </RateController>
 
-        <!-- Navigation — blacklist only on failure ──────────────────────────
-          ForceSuccess (NavAndMark):
-            A Fallback with two children:
-              Child 1 — RetryUntilSuccessful:
-                           Tries to navigate up to 3 times.
-                           Returns SUCCESS if any attempt succeeds.
-                           Returns FAILURE only after all attempts fail.
-              Child 2 — BlacklistFrontier:
-                           Only reached when all 3 nav attempts failed.
-                           Marks the frontier unreachable so it is skipped
-                           on future ticks.  Always returns SUCCESS so the
-                           Fallback (and ForceSuccess) return SUCCESS too.
+          <!-- Navigation — blacklist only on failure ──────────────────────────
+            ForceSuccess (NavAndMark):
+              A Fallback with two children:
+                Child 1 — RetryUntilSuccessful:
+                             Tries to navigate up to 3 times.
+                             Returns SUCCESS if any attempt succeeds.
+                             Returns FAILURE only after all attempts fail.
+                Child 2 — BlacklistFrontier:
+                             Only reached when all 3 nav attempts failed.
+                             Marks the frontier unreachable so it is skipped
+                             on future ticks.  Always returns SUCCESS so the
+                             Fallback (and ForceSuccess) return SUCCESS too.
 
-          On navigation SUCCESS the Fallback short-circuits at child 1 and
-          BlacklistFrontier never runs.  Blacklisting on success is
-          unnecessary: once the robot reaches a frontier its sensors map the
-          area, and the wavefront detector naturally stops reporting that
-          position as a frontier on the next update.
+            On navigation SUCCESS the Fallback short-circuits at child 1 and
+            BlacklistFrontier never runs.  Blacklisting on success is
+            unnecessary: once the robot reaches a frontier its sensors map the
+            area, and the wavefront detector naturally stops reporting that
+            position as a frontier on the next update.
 
-          ForceSuccess ensures NavAndMark always returns SUCCESS so the
-          PipelineSequence keeps ticking.  The tree only truly terminates when
-          SelectFrontier returns FAILURE (exploration_done=true — no more
-          viable frontiers).
+            ForceSuccess ensures NavAndMark always returns SUCCESS so the
+            PipelineSequence returns SUCCESS (one leg done). The enclosing
+            KeepRunningUntilFailure then converts that SUCCESS into RUNNING,
+            keeping the tree alive for the next frontier selection.
+          -->
+          <ForceSuccess name="NavAndMark">
+            <Fallback>
+              <RetryUntilSuccessful num_attempts="3">
+                <NavigateToPose goal="{nav_goal}"/>
+              </RetryUntilSuccessful>
+              <!-- Only reached when all 3 attempts failed: -->
+              <BlacklistFrontier
+                goal="{nav_goal}"
+                blacklisted_goals="{blacklisted_goals}"/>
+            </Fallback>
+          </ForceSuccess>
 
-          Recovery: if SelectFrontier finds that ALL remaining frontiers are
-          blacklisted (but above the score threshold), it removes only the
-          blacklist entry for the best of those frontiers and retries rather
-          than immediately declaring exploration_done=true.
-        -->
-        <ForceSuccess name="NavAndMark">
-          <Fallback>
-            <RetryUntilSuccessful num_attempts="3">
-              <NavigateToPose goal="{nav_goal}"/>
-            </RetryUntilSuccessful>
-            <!-- Only reached when all 3 attempts failed: -->
-            <BlacklistFrontier
-              goal="{nav_goal}"
-              blacklisted_goals="{blacklisted_goals}"/>
-          </Fallback>
-        </ForceSuccess>
+        </PipelineSequence>
+      </KeepRunningUntilFailure>
 
-      </PipelineSequence>
-
-    </Fallback>
+    </ReactiveFallback>
 
   </BehaviorTree>
 
