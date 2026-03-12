@@ -63,3 +63,18 @@ hermes_navigate_node:
                                   # (0.0 = accept any frontier with non-negative score)
       blacklist_radius_m:  0.5    # Exclusion radius (m) around each blacklisted position;
                                   # frontiers within this distance are skipped
+
+    # ── Wall inspection parameters ────────────────────────────────────────────
+    # These parameters control Phase 2 of the mission: after frontier exploration
+    # is complete the robot systematically visits viewpoints facing every
+    # reachable wall segment so the front-facing camera can detect pictures.
+    wall_inspection:
+      standoff_m:          0.6    # Distance from the wall face to place the viewpoint [m].
+                                  # Must be large enough for Nav2 to navigate to the cell
+                                  # (i.e. outside the inflation radius).
+      cluster_distance_m:  1.0    # Spatial bucket size for merging adjacent wall-boundary
+                                  # candidates into a single viewpoint [m].  Increase to get
+                                  # fewer, sparser viewpoints along long walls.
+      min_segment_cells:   3      # Minimum number of wall-boundary candidates in a bucket
+                                  # to produce a viewpoint.  Increase to suppress noise from
+                                  # isolated obstacle pixels.

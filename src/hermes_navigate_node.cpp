@@ -34,6 +34,7 @@
 #include "hermes_navigate/bt_plugins/select_frontier_node.hpp"
 #include "hermes_navigate/bt_plugins/return_to_start_node.hpp"
 #include "hermes_navigate/bt_plugins/blacklist_frontier_node.hpp"
+#include "hermes_navigate/bt_plugins/select_wall_viewpoint_node.hpp"
 
 namespace hermes_navigate
 {
@@ -217,6 +218,7 @@ HermesNavigateNode::on_configure(const rclcpp_lifecycle::State &)
   blackboard_ = BT::Blackboard::create();
   blackboard_->set("start_pose",        start_pose_);
   blackboard_->set("exploration_done",  false);
+  blackboard_->set("inspection_done",   false);
   blackboard_->set("return_to_start",   false);
   blackboard_->set("nav_goal",          start_pose_);  // initialise to avoid unset port errors
   blackboard_->set("blacklisted_goals",
@@ -255,6 +257,7 @@ HermesNavigateNode::on_configure(const rclcpp_lifecycle::State &)
   SelectFrontierNode::registerWithFactory(factory_, self);
   ReturnToStartNode::registerWithFactory(factory_, get_logger());
   BlacklistFrontierNode::registerWithFactory(factory_, get_logger());
+  SelectWallViewpointNode::registerWithFactory(factory_, self);
 
   // ── Load BT tree from XML ─────────────────────────────────────────────────
   if (!loadBehaviorTree(bt_xml_file_)) {
@@ -284,9 +287,10 @@ HermesNavigateNode::on_activate(const rclcpp_lifecycle::State &)
 {
   RCLCPP_INFO(get_logger(), "HermesNavigateNode: activating — exploration begins.");
 
-  // Reset exploration state on the blackboard.
+  // Reset exploration and inspection state on the blackboard.
   blackboard_->set("return_to_start",  false);
   blackboard_->set("exploration_done", false);
+  blackboard_->set("inspection_done",  false);
 
   // Start the BT tick timer.
   auto period_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -404,21 +408,21 @@ void HermesNavigateNode::tickTree()
     if (status == BT::NodeStatus::RUNNING) {
       RCLCPP_DEBUG(get_logger(), "HermesNavigateNode: BT tick → RUNNING.");
     } else if (status == BT::NodeStatus::FAILURE) {
-      // FAILURE means SelectFrontier found no viable frontier
-      // (exploration_done=true) or an unexpected error occurred.  Either way,
-      // stop ticking.  With KeepRunningUntilFailure wrapping the exploration
-      // pipeline, successful navigation legs are converted to RUNNING and never
-      // reach here — only a true end-of-exploration FAILURE does.
+      // FAILURE means both phases are complete (exploration_done=true AND
+      // inspection_done=true after all wall viewpoints are visited) or an
+      // unexpected error occurred.  Either way, stop ticking.
+      // With KeepRunningUntilFailure wrapping each phase pipeline, successful
+      // navigation legs are converted to RUNNING and never reach here — only a
+      // true end-of-phase FAILURE does.
       bool exploration_done = false;
-      if (!blackboard_->get("exploration_done", exploration_done)) {
-        RCLCPP_WARN(get_logger(),
-          "HermesNavigateNode: 'exploration_done' key missing from blackboard; "
-          "assuming false.");
-      }
+      bool inspection_done  = false;
+      blackboard_->get("exploration_done", exploration_done);
+      blackboard_->get("inspection_done",  inspection_done);
       RCLCPP_INFO(get_logger(),
         "HermesNavigateNode: BT finished with status FAILURE "
-        "(exploration_done=%s). Stopping tick timer.",
-        exploration_done ? "true" : "false");
+        "(exploration_done=%s, inspection_done=%s). Stopping tick timer.",
+        exploration_done ? "true" : "false",
+        inspection_done  ? "true" : "false");
       tick_timer_->cancel();
     } else if (status == BT::NodeStatus::SUCCESS) {
       // SUCCESS means the return-to-start branch completed: the robot has
