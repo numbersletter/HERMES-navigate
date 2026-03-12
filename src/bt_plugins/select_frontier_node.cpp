@@ -55,7 +55,7 @@ BT::PortsList SelectFrontierNode::providedPorts()
   return {
     BT::InputPort<std::vector<ScoredFrontier>>("scored_frontiers"),
     BT::InputPort<geometry_msgs::msg::PoseStamped>("robot_pose"),
-    BT::InputPort<std::vector<geometry_msgs::msg::PoseStamped>>("blacklisted_goals"),
+    BT::BidirectionalPort<std::vector<geometry_msgs::msg::PoseStamped>>("blacklisted_goals"),
     BT::OutputPort<geometry_msgs::msg::PoseStamped>("nav_goal"),
     BT::OutputPort<bool>("exploration_done"),
   };
@@ -131,15 +131,60 @@ BT::NodeStatus SelectFrontierNode::tick()
   }
 
   if (!best) {
-    if (node) {
-      RCLCPP_WARN(node->get_logger(),
-        "SelectFrontierNode: no viable frontier found "
-        "(total=%zu, below_threshold=%zu, blacklisted=%zu) — setting exploration_done=true.",
-        scored.size(), n_below_threshold, n_blacklisted);
+    // If there are frontiers that are above the score threshold but only
+    // excluded because they were previously blacklisted, fall back to
+    // selecting the best of those rather than halting exploration.  Only the
+    // blacklist entries near the chosen frontier are removed so that other
+    // genuinely unreachable positions remain excluded.
+    if (n_blacklisted > 0) {
+      const ScoredFrontier * fallback = nullptr;
+      for (const auto & sf : scored) {
+        if (sf.score >= min_frontier_score_ && is_blacklisted(sf.frontier.goal_pose)) {
+          if (!fallback || sf.score > fallback->score) {
+            fallback = &sf;
+          }
+        }
+      }
+      if (fallback) {
+        if (node) {
+          RCLCPP_WARN(node->get_logger(),
+            "SelectFrontierNode: all frontiers were blacklisted "
+            "(total=%zu, blacklisted=%zu) — removing blacklist entry for "
+            "frontier at (%.2f, %.2f) [score=%.1f] and retrying.",
+            scored.size(), n_blacklisted,
+            fallback->frontier.goal_pose.pose.position.x,
+            fallback->frontier.goal_pose.pose.position.y,
+            fallback->score);
+        }
+        // Remove only the blacklist entries near the selected frontier so
+        // other genuinely unreachable positions remain excluded.
+        const auto & target = fallback->frontier.goal_pose;
+        blacklist.erase(
+          std::remove_if(
+            blacklist.begin(), blacklist.end(),
+            [&](const geometry_msgs::msg::PoseStamped & bl) {
+              const double dx = target.pose.position.x - bl.pose.position.x;
+              const double dy = target.pose.position.y - bl.pose.position.y;
+              return (dx * dx + dy * dy) < radius_sq;
+            }),
+          blacklist.end());
+        setOutput("blacklisted_goals", blacklist);
+        best = fallback;
+        has_active_goal_ = false;
+      }
     }
-    setOutput("exploration_done", true);
-    has_active_goal_ = false;
-    return BT::NodeStatus::FAILURE;  // no viable frontier — signal exploration complete
+
+    if (!best) {
+      if (node) {
+        RCLCPP_WARN(node->get_logger(),
+          "SelectFrontierNode: no viable frontier found "
+          "(total=%zu, below_threshold=%zu, blacklisted=%zu) — setting exploration_done=true.",
+          scored.size(), n_below_threshold, n_blacklisted);
+      }
+      setOutput("exploration_done", true);
+      has_active_goal_ = false;
+      return BT::NodeStatus::FAILURE;  // no viable frontier — signal exploration complete
+    }
   }
 
   setOutput("exploration_done", false);
