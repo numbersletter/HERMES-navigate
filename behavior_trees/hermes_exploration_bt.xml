@@ -109,13 +109,19 @@
                        On success: marks the reached frontier visited so it is
                          not re-selected on future ticks.
                        On failure: marks the unreachable frontier so it is
-                         permanently skipped during this exploration run.
+                         skipped on future ticks.
 
           NavAndMark always returns SUCCESS.  The PipelineSequence therefore
           returns SUCCESS once per navigation leg.  tickTree() detects this and
           keeps the tick timer alive so the robot immediately selects the next
-          frontier.  The tree only truly terminates when SelectFrontier returns
-          FAILURE (exploration_done=true — no more viable frontiers).
+          frontier.
+
+          Recovery: if SelectFrontier finds that ALL remaining frontiers are
+          blacklisted (but are above the score threshold), it clears the
+          blacklist and retries the best of those frontiers rather than
+          immediately declaring exploration_done=true.  The tree only truly
+          terminates when there are no frontiers at all (or all are below the
+          minimum score threshold).
         -->
         <Sequence name="NavAndMark">
           <ForceSuccess>
