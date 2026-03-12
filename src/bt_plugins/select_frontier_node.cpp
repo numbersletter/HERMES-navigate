@@ -116,6 +116,35 @@ BT::NodeStatus SelectFrontierNode::tick()
     has_active_goal_ = false;
   }
 
+  // Also reset hysteresis if the active goal no longer appears among the scored
+  // frontiers.  This happens when the wavefront detector clears a just-visited
+  // frontier from its map before the blacklist entry from the BT propagates.
+  // Without this check, hysteresis would keep directing the robot to a position
+  // that is no longer a frontier, causing it to navigate to its own location
+  // repeatedly.
+  if (has_active_goal_) {
+    bool goal_still_frontier = false;
+    for (const auto & sf : scored) {
+      const double dx =
+        sf.frontier.goal_pose.pose.position.x - active_goal_.pose.position.x;
+      const double dy =
+        sf.frontier.goal_pose.pose.position.y - active_goal_.pose.position.y;
+      if ((dx * dx + dy * dy) < radius_sq) {
+        goal_still_frontier = true;
+        break;
+      }
+    }
+    if (!goal_still_frontier) {
+      if (node) {
+        RCLCPP_INFO(node->get_logger(),
+          "SelectFrontierNode: active goal (%.2f, %.2f) no longer a frontier — "
+          "resetting hysteresis.",
+          active_goal_.pose.position.x, active_goal_.pose.position.y);
+      }
+      has_active_goal_ = false;
+    }
+  }
+
   // Find the best viable (above-threshold, non-blacklisted) frontier.
   const ScoredFrontier * best = nullptr;
   std::size_t n_below_threshold = 0;

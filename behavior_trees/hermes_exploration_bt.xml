@@ -43,8 +43,8 @@
     nav_goal          (geometry_msgs/PoseStamped) — written by SelectFrontier
                                                     or ReturnToStart
     blacklisted_goals (vector<PoseStamped>)       — grown by BlacklistFrontier on
-                                                     nav failure; read and trimmed
-                                                     by SelectFrontier
+                                                     nav success or failure; read
+                                                     and trimmed by SelectFrontier
 -->
 <root BTCPP_format="4" main_tree_to_execute="HermesExplorationBT">
 
@@ -100,24 +100,28 @@
           </Sequence>
         </RateController>
 
-        <!-- Navigation — blacklist only on failure ──────────────────────────
+        <!-- Navigation — blacklist on success AND failure ──────────────────
           ForceSuccess (NavAndMark):
-            A Fallback with two children:
-              Child 1 — RetryUntilSuccessful:
-                           Tries to navigate up to 3 times.
-                           Returns SUCCESS if any attempt succeeds.
-                           Returns FAILURE only after all attempts fail.
-              Child 2 — BlacklistFrontier:
-                           Only reached when all 3 nav attempts failed.
-                           Marks the frontier unreachable so it is skipped
-                           on future ticks.  Always returns SUCCESS so the
-                           Fallback (and ForceSuccess) return SUCCESS too.
+            A Sequence with two children:
+              Child 1 — Fallback:
+                           RetryUntilSuccessful tries to navigate up to 3
+                           times.  Returns SUCCESS if any attempt succeeds.
+                           If all attempts fail, BlacklistFrontier (failure
+                           path) marks the frontier unreachable and returns
+                           SUCCESS so the Fallback succeeds.
+              Child 2 — BlacklistFrontier (visited path):
+                           Always runs after the Fallback (regardless of
+                           whether navigation succeeded or failed).  Marks
+                           the attempted goal as visited so SelectFrontier
+                           will not re-select the same position on the next
+                           1 Hz tick.  Deduplication inside BlacklistFrontier
+                           makes the double-write on the failure path a no-op.
 
-          On navigation SUCCESS the Fallback short-circuits at child 1 and
-          BlacklistFrontier never runs.  Blacklisting on success is
-          unnecessary: once the robot reaches a frontier its sensors map the
-          area, and the wavefront detector naturally stops reporting that
-          position as a frontier on the next update.
+          Blacklisting on success is necessary because the wavefront detector
+          may continue to report a just-visited frontier until the occupancy
+          grid is updated.  Without this, SelectFrontier's hysteresis keeps
+          returning the same nav_goal and NavigateToPose loops indefinitely
+          over a position the robot has already reached.
 
           ForceSuccess ensures NavAndMark always returns SUCCESS so the
           PipelineSequence keeps ticking.  The tree only truly terminates when
@@ -130,15 +134,22 @@
           than immediately declaring exploration_done=true.
         -->
         <ForceSuccess name="NavAndMark">
-          <Fallback>
-            <RetryUntilSuccessful num_attempts="3">
-              <NavigateToPose goal="{nav_goal}"/>
-            </RetryUntilSuccessful>
-            <!-- Only reached when all 3 attempts failed: -->
+          <Sequence>
+            <Fallback>
+              <RetryUntilSuccessful num_attempts="3">
+                <NavigateToPose goal="{nav_goal}"/>
+              </RetryUntilSuccessful>
+              <!-- Only reached when all 3 attempts failed: -->
+              <BlacklistFrontier
+                goal="{nav_goal}"
+                blacklisted_goals="{blacklisted_goals}"/>
+            </Fallback>
+            <!-- Always runs after navigation (success or failure) to mark
+                 the goal as visited and prevent immediate re-selection. -->
             <BlacklistFrontier
               goal="{nav_goal}"
               blacklisted_goals="{blacklisted_goals}"/>
-          </Fallback>
+          </Sequence>
         </ForceSuccess>
 
       </PipelineSequence>
