@@ -116,6 +116,35 @@ BT::NodeStatus SelectFrontierNode::tick()
     has_active_goal_ = false;
   }
 
+  // If the currently tracked goal is no longer reported as a frontier (i.e. the
+  // robot reached it and the wavefront detector has since mapped the area and
+  // removed it from the frontier list), clear hysteresis so the next best
+  // frontier is chosen without bias from the stale active goal.  Without this
+  // check the hysteresis guard can keep nav_goal pointing at an already-visited
+  // position, causing the robot to revisit it indefinitely.
+  if (has_active_goal_) {
+    bool active_still_frontier = false;
+    for (const auto & sf : scored) {
+      const double dx =
+        active_goal_.pose.position.x - sf.frontier.goal_pose.pose.position.x;
+      const double dy =
+        active_goal_.pose.position.y - sf.frontier.goal_pose.pose.position.y;
+      if ((dx * dx + dy * dy) < radius_sq) {
+        active_still_frontier = true;
+        break;
+      }
+    }
+    if (!active_still_frontier) {
+      if (node) {
+        RCLCPP_INFO(node->get_logger(),
+          "SelectFrontierNode: active goal (%.2f, %.2f) is no longer a frontier "
+          "(reached and mapped) — resetting hysteresis.",
+          active_goal_.pose.position.x, active_goal_.pose.position.y);
+      }
+      has_active_goal_ = false;
+    }
+  }
+
   // Find the best viable (above-threshold, non-blacklisted) frontier.
   const ScoredFrontier * best = nullptr;
   std::size_t n_below_threshold = 0;

@@ -117,7 +117,9 @@
           BlacklistFrontier never runs.  Blacklisting on success is
           unnecessary: once the robot reaches a frontier its sensors map the
           area, and the wavefront detector naturally stops reporting that
-          position as a frontier on the next update.
+          position as a frontier on the next update.  SelectFrontierNode
+          detects this disappearance and clears its hysteresis state, so it
+          will not keep re-sending a nav_goal that has already been reached.
 
           ForceSuccess ensures NavAndMark always returns SUCCESS so the
           PipelineSequence keeps ticking.  The tree only truly terminates when
