@@ -28,11 +28,12 @@
   │         │       AssignCosts       ← InformationGainPlugin + EuclideanPlugin
   │         │       SelectFrontier    ← hysteresis selection, skips blacklist;
   │         │                            writes nav_goal directly to blackboard
-  │         └─ Sequence (NavAndMark)
-  │               ForceSuccess
+  │         └─ ForceSuccess (NavAndMark)
+  │               Fallback
   │                 RetryUntilSuccessful(num_attempts=3)
   │                   NavigateToPose(nav_goal)  ← Nav2 built-in; 3 attempts
-  │               BlacklistFrontier(nav_goal) ← marks frontier visited/unreachable
+  │                 BlacklistFrontier(nav_goal) ← ONLY on failure: marks frontier
+  │                                               unreachable so it is skipped
 
   Blackboard entries (written by HermesNavigateNode before the first tick):
     start_pose        (geometry_msgs/PoseStamped) — captured at configure
@@ -41,8 +42,9 @@
     robot_pose        (geometry_msgs/PoseStamped) — updated every tick
     nav_goal          (geometry_msgs/PoseStamped) — written by SelectFrontier
                                                     or ReturnToStart
-    blacklisted_goals (vector<PoseStamped>)       — grown by BlacklistFrontier;
-                                                    read by SelectFrontier
+    blacklisted_goals (vector<PoseStamped>)       — grown by BlacklistFrontier on
+                                                     nav failure; read and trimmed
+                                                     by SelectFrontier
 -->
 <root BTCPP_format="4" main_tree_to_execute="HermesExplorationBT">
 
@@ -98,36 +100,46 @@
           </Sequence>
         </RateController>
 
-        <!-- Navigation with automatic blacklisting on every outcome ──────────
-          Sequence (NavAndMark):
-            Step 1 — ForceSuccess wrapping RetryUntilSuccessful:
-                       Tries to navigate up to 3 times.  ForceSuccess converts
-                       the result to SUCCESS regardless of whether navigation
-                       succeeded or all attempts were exhausted.
-            Step 2 — BlacklistFrontier:
-                       Always runs exactly once after any navigation outcome.
-                       On success: marks the reached frontier visited so it is
-                         not re-selected on future ticks.
-                       On failure: marks the unreachable frontier so it is
-                         permanently skipped during this exploration run.
+        <!-- Navigation — blacklist only on failure ──────────────────────────
+          ForceSuccess (NavAndMark):
+            A Fallback with two children:
+              Child 1 — RetryUntilSuccessful:
+                           Tries to navigate up to 3 times.
+                           Returns SUCCESS if any attempt succeeds.
+                           Returns FAILURE only after all attempts fail.
+              Child 2 — BlacklistFrontier:
+                           Only reached when all 3 nav attempts failed.
+                           Marks the frontier unreachable so it is skipped
+                           on future ticks.  Always returns SUCCESS so the
+                           Fallback (and ForceSuccess) return SUCCESS too.
 
-          NavAndMark always returns SUCCESS.  The PipelineSequence therefore
-          returns SUCCESS once per navigation leg.  tickTree() detects this and
-          keeps the tick timer alive so the robot immediately selects the next
-          frontier.  The tree only truly terminates when SelectFrontier returns
-          FAILURE (exploration_done=true — no more viable frontiers).
+          On navigation SUCCESS the Fallback short-circuits at child 1 and
+          BlacklistFrontier never runs.  Blacklisting on success is
+          unnecessary: once the robot reaches a frontier its sensors map the
+          area, and the wavefront detector naturally stops reporting that
+          position as a frontier on the next update.
+
+          ForceSuccess ensures NavAndMark always returns SUCCESS so the
+          PipelineSequence keeps ticking.  The tree only truly terminates when
+          SelectFrontier returns FAILURE (exploration_done=true — no more
+          viable frontiers).
+
+          Recovery: if SelectFrontier finds that ALL remaining frontiers are
+          blacklisted (but above the score threshold), it removes only the
+          blacklist entry for the best of those frontiers and retries rather
+          than immediately declaring exploration_done=true.
         -->
-        <Sequence name="NavAndMark">
-          <ForceSuccess>
+        <ForceSuccess name="NavAndMark">
+          <Fallback>
             <RetryUntilSuccessful num_attempts="3">
               <NavigateToPose goal="{nav_goal}"/>
             </RetryUntilSuccessful>
-          </ForceSuccess>
-          <!-- Mark frontier visited/unreachable exactly once, regardless of outcome. -->
-          <BlacklistFrontier
-            goal="{nav_goal}"
-            blacklisted_goals="{blacklisted_goals}"/>
-        </Sequence>
+            <!-- Only reached when all 3 attempts failed: -->
+            <BlacklistFrontier
+              goal="{nav_goal}"
+              blacklisted_goals="{blacklisted_goals}"/>
+          </Fallback>
+        </ForceSuccess>
 
       </PipelineSequence>
 
