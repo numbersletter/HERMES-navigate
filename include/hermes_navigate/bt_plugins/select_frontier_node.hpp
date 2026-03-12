@@ -46,12 +46,17 @@ namespace hermes_navigate
  * viable frontier remains, the node sets `exploration_done = true` on the
  * blackboard.
  *
+ * When no non-blacklisted frontier remains but there are valid frontiers that
+ * are only excluded due to blacklisting, the node clears the blacklist and
+ * selects the best of those previously-blacklisted frontiers as a fallback so
+ * that exploration can continue rather than terminating prematurely.
+ *
  * BT ports:
- *   Input:  "scored_frontiers"  — std::vector<ScoredFrontier>
- *   Input:  "robot_pose"        — geometry_msgs::msg::PoseStamped
- *   Input:  "blacklisted_goals" — std::vector<geometry_msgs::msg::PoseStamped>
- *   Output: "nav_goal"          — geometry_msgs::msg::PoseStamped
- *   Output: "exploration_done"  — bool
+ *   Input:        "scored_frontiers"  — std::vector<ScoredFrontier>
+ *   Input:        "robot_pose"        — geometry_msgs::msg::PoseStamped
+ *   Input/Output: "blacklisted_goals" — std::vector<geometry_msgs::msg::PoseStamped>
+ *   Output:       "nav_goal"          — geometry_msgs::msg::PoseStamped
+ *   Output:       "exploration_done"  — bool
  */
 class SelectFrontierNode : public BT::SyncActionNode
 {
