@@ -404,9 +404,11 @@ void HermesNavigateNode::tickTree()
     if (status == BT::NodeStatus::RUNNING) {
       RCLCPP_DEBUG(get_logger(), "HermesNavigateNode: BT tick → RUNNING.");
     } else if (status == BT::NodeStatus::FAILURE) {
-      // FAILURE during exploration means SelectFrontier found no viable frontier
+      // FAILURE means SelectFrontier found no viable frontier
       // (exploration_done=true) or an unexpected error occurred.  Either way,
-      // stop ticking.
+      // stop ticking.  With KeepRunningUntilFailure wrapping the exploration
+      // pipeline, successful navigation legs are converted to RUNNING and never
+      // reach here — only a true end-of-exploration FAILURE does.
       bool exploration_done = false;
       if (!blackboard_->get("exploration_done", exploration_done)) {
         RCLCPP_WARN(get_logger(),
@@ -419,26 +421,15 @@ void HermesNavigateNode::tickTree()
         exploration_done ? "true" : "false");
       tick_timer_->cancel();
     } else if (status == BT::NodeStatus::SUCCESS) {
-      // SUCCESS during the return-to-start branch means the robot has reached
-      // its start pose — stop ticking.  SUCCESS during normal exploration just
-      // means one navigation leg finished; keep the timer running so the robot
-      // immediately selects and navigates to the next frontier.
-      bool return_to_start = false;
-      if (!blackboard_->get("return_to_start", return_to_start)) {
-        RCLCPP_WARN(get_logger(),
-          "HermesNavigateNode: 'return_to_start' key missing from blackboard; "
-          "treating as false (continue exploration).");
-      }
-      if (return_to_start) {
-        RCLCPP_INFO(get_logger(),
-          "HermesNavigateNode: BT finished with status SUCCESS (returned to start). "
-          "Stopping tick timer.");
-        tick_timer_->cancel();
-      } else {
-        RCLCPP_INFO(get_logger(),
-          "HermesNavigateNode: BT tick → SUCCESS (navigation leg complete). "
-          "Continuing exploration.");
-      }
+      // SUCCESS means the return-to-start branch completed: the robot has
+      // reached its start pose.  With KeepRunningUntilFailure wrapping the
+      // exploration pipeline, exploration legs can never produce SUCCESS here —
+      // they are converted to RUNNING by the decorator, so the tree stays alive
+      // between legs without any manual restart.
+      RCLCPP_INFO(get_logger(),
+        "HermesNavigateNode: BT finished with status SUCCESS (returned to start). "
+        "Stopping tick timer.");
+      tick_timer_->cancel();
     }
   } catch (const std::exception & e) {
     RCLCPP_ERROR(get_logger(), "HermesNavigateNode: BT tick threw: %s", e.what());
