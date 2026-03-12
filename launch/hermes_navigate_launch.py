@@ -19,12 +19,15 @@ hermes_navigate_launch.py
 Main entry-point launch file for the HERMES autonomous exploration suite.
 
 Launches:
-  1. robot_state_publisher  — publishes /tf from the robot SDF description
-  2. slam_toolbox (online async)  — simultaneous mapping + localisation
-  3. Nav2 (full stack)            — local / global planning + costmaps
-  4. hermes_navigate_node         — main lifecycle node (BT-driven exploration)
-  5. coverage_tracker_node        — camera-coverage tracking (lifecycle)
-  6. Lifecycle manager            — auto-configures and activates lifecycle nodes
+  1. robot_state_publisher  — publishes /tf from the robot URDF description
+  2. joint_state_publisher  — publishes /joint_states for all robot joints
+                              (static zeros for wheel joints until a hardware
+                              driver populates them via source_list)
+  3. slam_toolbox (online async)  — simultaneous mapping + localisation
+  4. Nav2 (full stack)            — local / global planning + costmaps
+  5. hermes_navigate_node         — main lifecycle node (BT-driven exploration)
+  6. coverage_tracker_node        — camera-coverage tracking (lifecycle)
+  7. Lifecycle manager            — auto-configures and activates lifecycle nodes
 
 Launch arguments
 ----------------
@@ -52,7 +55,7 @@ def generate_launch_description():
     pkg_nav2_bringup    = get_package_share_directory("nav2_bringup")
 
     # ── Paths to config / resource files ─────────────────────────────────────
-    sdf_xacro_file   = os.path.join(pkg_hermes_navigate, "urdf", "hermes_sim.sdf.xacro")
+    urdf_xacro_file  = os.path.join(pkg_hermes_navigate, "urdf", "hermes_robot.urdf.xacro")
     nav2_params_file = os.path.join(pkg_hermes_navigate, "config", "nav2_params.yaml")
     slam_params_file = os.path.join(pkg_hermes_navigate, "config",
                                     "slam_toolbox_params.yaml")
@@ -71,14 +74,31 @@ def generate_launch_description():
 
     use_sim_time = LaunchConfiguration("use_sim_time")
 
-    # ── Robot description (process SDF xacro) ────────────────────────────────
-    robot_description_content = xacro.process_file(sdf_xacro_file).toxml()
+    # ── Robot description (process URDF xacro) ──────────────────────────────
+    robot_description_content = xacro.process_file(urdf_xacro_file).toxml()
 
     # ── robot_state_publisher ─────────────────────────────────────────────────
     robot_state_pub = Node(
         package="robot_state_publisher",
         executable="robot_state_publisher",
         name="robot_state_publisher",
+        output="screen",
+        parameters=[{
+            "robot_description": robot_description_content,
+            "use_sim_time":      use_sim_time,
+        }],
+    )
+
+    # ── joint_state_publisher ─────────────────────────────────────────────────
+    # Publishes /joint_states for all robot joints.
+    # Fixed joints (base_joint, caster_joint, lidar_joint) are handled
+    # automatically by robot_state_publisher as static TF.
+    # Continuous wheel joints (drivewhl_l_joint, drivewhl_r_joint) are
+    # published at 0.0 until a hardware driver adds them to source_list.
+    joint_state_pub = Node(
+        package="joint_state_publisher",
+        executable="joint_state_publisher",
+        name="joint_state_publisher",
         output="screen",
         parameters=[{
             "robot_description": robot_description_content,
@@ -166,6 +186,7 @@ def generate_launch_description():
         declare_log_level,
 
         robot_state_pub,
+        joint_state_pub,
         slam_toolbox_node,
         nav2_bringup,
 
