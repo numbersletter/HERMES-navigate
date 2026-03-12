@@ -42,9 +42,12 @@ namespace hermes_navigate
  *      that the robot never wastes time retrying unreachable goals.
  *
  * Hysteresis requires a new frontier's score to exceed the current goal's
- * score by `hysteresis_factor` (fractional) before switching.  When no
- * viable frontier remains, the node sets `exploration_done = true` on the
- * blackboard.
+ * score by `hysteresis_factor` (fractional) before switching.  Hysteresis is
+ * automatically cleared when the active goal disappears from the frontier list
+ * (i.e. the robot reached it and the wavefront detector has since mapped that
+ * area), ensuring the robot does not revisit an already-explored position.
+ * When no viable frontier remains, the node sets `exploration_done = true` on
+ * the blackboard.
  *
  * When no non-blacklisted frontier remains but there are valid frontiers that
  * are only excluded due to blacklisting, the node clears the blacklist and
