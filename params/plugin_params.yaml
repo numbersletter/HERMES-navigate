@@ -30,9 +30,23 @@ hermes_navigate_node:
 
     # ── WavefrontFrontierDetector parameters ──────────────────────────────────
     wavefront_frontier_detector:
-      min_frontier_size:   3      # Minimum cells to form a valid frontier cluster
-      clustering_distance: 0.5    # Max distance (m) between cells in a cluster
-      search_distance:     10.0   # BFS search radius from robot (m); 0 = unlimited
+      min_frontier_size:      2      # Minimum cells to form a valid frontier cluster.
+                                     # 2 cells × 0.025 m/cell = 5 cm — accepts narrow
+                                     # corridor frontiers in a 1.22 m enclosure.
+      clustering_distance:    0.12   # Max merge distance (m) between frontier cells in a
+                                     # cluster.  0.5 m would merge frontiers on opposite walls
+                                     # of a 1.22 m enclosure into one goal.  0.12 m keeps
+                                     # each wall-segment frontier distinct (~5 cells at
+                                     # 0.025 m/cell global costmap resolution).
+      search_distance:        10.0   # BFS search radius from robot (m); 0 = unlimited.
+                                     # 10 m covers any realistic enclosure size.
+      seed_search_radius_m:   0.5    # Radius (m) searched around the robot cell to find a
+                                     # free BFS seed when the robot's own cell is UNKNOWN or
+                                     # LETHAL (e.g. at startup before SLAM has mapped the area,
+                                     # or when the robot's inflation footprint marks immediate
+                                     # neighbours as LETHAL).  Increase if you see
+                                     # "robot cell and all neighbours are UNKNOWN or LETHAL"
+                                     # warnings at the start of exploration.
 
     # ── Cost plugin selection (ordered list; scores are summed) ───────────────
     cost_plugins:
@@ -48,7 +62,9 @@ hermes_navigate_node:
     # Scores a frontier by the number of unknown cells visible via ray-casting.
     information_gain:
       weight:           1.0   # Score multiplier (positive = attractive)
-      max_ray_length_m: 5.0   # Maximum ray length [m]
+      max_ray_length_m: 2.0   # Maximum ray length [m].  The 4×4 ft enclosure diagonal is
+                               # ~1.73 m, so rays beyond 2.0 m never reveal new information
+                               # and only add computation.
       num_rays:         36    # Number of rays cast (angular resolution)
 
     # ── EuclideanPlugin parameters ────────────────────────────────────────────
@@ -58,8 +74,32 @@ hermes_navigate_node:
 
     # ── SelectFrontierNode parameters ─────────────────────────────────────────
     select_frontier:
-      hysteresis_factor:   0.15   # Fraction above current score needed to switch goal
+      hysteresis_factor:   0.10   # Fraction above current score needed to switch goal.
+                                  # Reduced from 0.15 so the robot re-evaluates frontiers
+                                  # more readily in a small, rapidly-changing costmap.
       min_frontier_score:  0.0    # Minimum composite score to consider a frontier viable
                                   # (0.0 = accept any frontier with non-negative score)
-      blacklist_radius_m:  0.5    # Exclusion radius (m) around each blacklisted position;
-                                  # frontiers within this distance are skipped
+      blacklist_radius_m:  0.15   # Exclusion radius (m) around each blacklisted/visited
+                                  # position.  0.5 m in a 1.22 m enclosure would exclude
+                                  # >50% of free space after a single visited frontier.
+                                  # 0.15 m (= ~6 cells at 0.025 m/cell) is a tight but
+                                  # adequate exclusion zone that still prevents the robot
+                                  # from re-visiting the exact same cell.
+
+    # ── Wall inspection parameters ────────────────────────────────────────────
+    # These parameters control Phase 2 of the mission: after frontier exploration
+    # is complete the robot systematically visits viewpoints facing every
+    # reachable wall segment so the front-facing camera can detect pictures.
+    wall_inspection:
+      standoff_m:          0.25   # Distance from the wall face to place the viewpoint [m].
+                                  # In a 4×4 ft (1.22 m) enclosure the robot cannot be more
+                                  # than ~0.61 m from a wall.  0.25 m keeps the viewpoint
+                                  # well inside the free space while still clearing the
+                                  # inflation radius (robot_radius 0.075 m + inflation 0.12 m
+                                  # = 0.195 m effective footprint).
+      cluster_distance_m:  0.30   # Spatial bucket size for merging adjacent wall-boundary
+                                  # candidates into a single viewpoint [m].  1.0 m was larger
+                                  # than the enclosure width and merged all walls into one
+                                  # viewpoint.  0.30 m keeps each wall segment distinct.
+      min_segment_cells:   2      # Minimum number of wall-boundary candidates in a bucket
+                                  # to produce a viewpoint.  Matches min_frontier_size.

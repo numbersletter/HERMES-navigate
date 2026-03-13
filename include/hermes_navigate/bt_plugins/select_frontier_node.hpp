@@ -33,28 +33,37 @@ namespace hermes_navigate
  * @brief BT action node that selects the best scored frontier as the next
  *        navigation goal, with hysteresis to prevent rapid goal-switching.
  *
- * The best frontier (highest composite score) is selected, subject to two
- * filters:
+ * The best frontier (highest composite score) is selected, subject to three
+ * filters applied in order:
  *   1. Its score must be at least `min_frontier_score`.
  *   2. Its goal pose must not be within `blacklist_radius_m` of any position
+ *      in the `visited_frontiers` blackboard list.  Frontiers the robot has
+ *      already successfully navigated to (recorded by MarkFrontierVisitedNode)
+ *      are permanently excluded so the robot never revisits them.
+ *   3. Its goal pose must not be within `blacklist_radius_m` of any position
  *      in the `blacklisted_goals` blackboard list.  Frontiers that Nav2
  *      failed to reach (recorded by BlacklistFrontierNode) are excluded so
  *      that the robot never wastes time retrying unreachable goals.
  *
  * Hysteresis requires a new frontier's score to exceed the current goal's
- * score by `hysteresis_factor` (fractional) before switching.  When no
- * viable frontier remains, the node sets `exploration_done = true` on the
- * blackboard.
+ * score by `hysteresis_factor` (fractional) before switching.  When the
+ * active goal appears in either the visited or blacklisted list, hysteresis is
+ * reset so a fresh frontier can be selected on the next tick.  This is the
+ * core fix for the "robot gets stuck after reaching a frontier" bug: once a
+ * frontier is marked visited, the hysteresis bias toward it is cleared and the
+ * robot moves on to the next best unvisited frontier.
  *
  * When no non-blacklisted frontier remains but there are valid frontiers that
- * are only excluded due to blacklisting, the node clears the blacklist and
- * selects the best of those previously-blacklisted frontiers as a fallback so
- * that exploration can continue rather than terminating prematurely.
+ * are only excluded due to blacklisting (and not visited), the node clears
+ * those blacklist entries and selects the best of them as a fallback so that
+ * exploration can continue rather than terminating prematurely.  Visited
+ * frontiers are never retried.
  *
  * BT ports:
  *   Input:        "scored_frontiers"  — std::vector<ScoredFrontier>
  *   Input:        "robot_pose"        — geometry_msgs::msg::PoseStamped
  *   Input/Output: "blacklisted_goals" — std::vector<geometry_msgs::msg::PoseStamped>
+ *   Input:        "visited_frontiers" — std::vector<geometry_msgs::msg::PoseStamped>
  *   Output:       "nav_goal"          — geometry_msgs::msg::PoseStamped
  *   Output:       "exploration_done"  — bool
  */

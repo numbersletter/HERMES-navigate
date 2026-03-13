@@ -1,61 +1,95 @@
 <?xml version="1.0"?>
 <!--
-  HERMES Exploration Behavior Tree
-  =================================
+  HERMES Exploration + Wall Inspection Behavior Tree
+  ====================================================
   Entry point: loaded by HermesNavigateNode on on_configure().
 
   Lifecycle / service behaviour:
     CONFIGURED  → Tree is loaded but NOT ticked. Robot is stationary.
-    ACTIVE      → Tick timer starts. Exploration branch runs.
+    ACTIVE      → Tick timer starts. Phase 1 (exploration) begins.
     DEACTIVATED → Tick timer stops; tree is halted (paused). Robot stays put.
-    ~/stop srv  → Sets return_to_start=true and restarts tick timer so the
-                   ReturnBranch executes; ReturnToStart sets nav_goal to the
-                   recorded start pose and Nav2's NavigateToPose drives the
-                   robot home.
+    ~/stop srv  → Sets return_to_start=true. The ReactiveFallback re-evaluates
+                   the ReturnBranch on the very next tick, immediately halting
+                   whichever phase is active. ReturnToStart sets nav_goal to
+                   the recorded start pose and Nav2's NavigateToPose drives
+                   the robot home.
 
-  Tree structure (top-level Fallback):
-  ┌─ Fallback (MainFallback)
+  Two-phase tree structure (top-level ReactiveFallback):
+  ┌─ ReactiveFallback (MainFallback)
+  │   │
+  │   │   Re-evaluates child 1 (ReturnBranch) from the top on EVERY tick.
+  │   │   During Phase 1/2 ReturnBranch fails (condition false) and the
+  │   │   fallback falls through to child 2.  The moment ~/stop sets
+  │   │   return_to_start=true the condition succeeds, the active phase is
+  │   │   halted, and the robot navigates home.
   │   │
   │   ├─ [Return branch]  Sequence
   │   │     ReturnToStartCondition(return_to_start)
   │   │     ReturnToStart(start_pose → nav_goal)  ← sets goal, no navigation
   │   │     NavigateToPose(nav_goal)              ← Nav2 built-in; plans path
   │   │
-  │   └─ [Exploration branch]  PipelineSequence
-  │         ├─ RateController(1 Hz)
-  │         │     Sequence
-  │         │       SearchFrontiers   ← WavefrontFrontierDetector plugin
-  │         │       AssignCosts       ← InformationGainPlugin + EuclideanPlugin
-  │         │       SelectFrontier    ← hysteresis selection, skips blacklist;
-  │         │                            writes nav_goal directly to blackboard
-  │         └─ ForceSuccess (NavAndMark)
-  │               Fallback
-  │                 RetryUntilSuccessful(num_attempts=3)
-  │                   NavigateToPose(nav_goal)  ← Nav2 built-in; 3 attempts
-  │                 BlacklistFrontier(nav_goal) ← ONLY on failure: marks frontier
-  │                                               unreachable so it is skipped
+  │   └─ [Phase sequence]  Sequence (stateful — advances Phase 1 → Phase 2)
+  │         │
+  │         ├─ [Phase 1: Frontier Exploration]  ForceSuccess
+  │         │     KeepRunningUntilFailure
+  │         │       PipelineSequence (ExplorationPipeline)
+  │         │         ├─ RateController(1 Hz)
+  │         │         │     Sequence
+  │         │         │       SearchFrontiers   ← WavefrontFrontierDetector
+  │         │         │       AssignCosts       ← InformationGain + Euclidean
+  │         │         │       SelectFrontier    ← writes nav_goal; sets
+  │         │         │                            exploration_done on finish
+  │         │         └─ ForceSuccess (NavAndMark)
+  │         │               Fallback
+  │         │                 RetryUntilSuccessful(3) NavigateToPose(nav_goal)
+  │         │                 BlacklistFrontier(nav_goal) ← on nav failure
+  │         │
+  │         │   When exploration ends, SelectFrontier returns FAILURE →
+  │         │   KeepRunningUntilFailure propagates FAILURE →
+  │         │   ForceSuccess converts FAILURE → SUCCESS →
+  │         │   outer Sequence advances to Phase 2.
+  │         │
+  │         └─ [Phase 2: Wall Inspection]  KeepRunningUntilFailure
+  │               Sequence (InspectionPipeline) — stateful: skips child 0
+  │                 │                            while child 1 is RUNNING
+  │                 ├─ SelectWallViewpoint       ← scans costmap once for
+  │                 │     robot_pose               occupied-boundary cells,
+  │                 │     nav_goal                 clusters them and orders
+  │                 │     inspection_done          by nearest-neighbour tour;
+  │                 │                             pops one viewpoint per leg
+  │                 └─ ForceSuccess (NavToWall)
+  │                       RetryUntilSuccessful(3)
+  │                         NavigateToPose(nav_goal)
 
   Blackboard entries (written by HermesNavigateNode before the first tick):
     start_pose        (geometry_msgs/PoseStamped) — captured at configure
     return_to_start   (bool)                      — true when ~/stop is called
     exploration_done  (bool)                      — set by SelectFrontier
+    inspection_done   (bool)                      — set by SelectWallViewpoint
     robot_pose        (geometry_msgs/PoseStamped) — updated every tick
-    nav_goal          (geometry_msgs/PoseStamped) — written by SelectFrontier
-                                                    or ReturnToStart
+    nav_goal          (geometry_msgs/PoseStamped) — written by SelectFrontier,
+                                                    SelectWallViewpoint, or
+                                                    ReturnToStart
     blacklisted_goals (vector<PoseStamped>)       — grown by BlacklistFrontier on
-                                                     nav failure; read and trimmed
-                                                     by SelectFrontier
+                                                     nav failure; trimmed by
+                                                     SelectFrontier
+    visited_frontiers (vector<PoseStamped>)       — grown by MarkFrontierVisited on
+                                                     nav success; never trimmed
+                                                     (permanent exclusion from
+                                                     SelectFrontier)
 -->
 <root BTCPP_format="4" main_tree_to_execute="HermesExplorationBT">
 
   <BehaviorTree ID="HermesExplorationBT">
 
     <!--
-      Top-level Fallback: the return-to-start branch is tried first every tick.
-      If return_to_start is false the condition immediately fails and the
-      exploration pipeline runs instead.
+      Top-level ReactiveFallback: re-evaluates child 1 (ReturnBranch) on EVERY
+      tick.  During exploration/inspection ReturnBranch fails (condition false)
+      and the fallback falls through to the PhaseSequence child.  The moment
+      ~/stop sets return_to_start=true the condition succeeds, the active phase
+      is halted, and the robot navigates home.
     -->
-    <Fallback name="MainFallback">
+    <ReactiveFallback name="MainFallback">
 
       <!-- ─── Return-to-Start branch ───────────────────────────────────────
            Fires when the ~/stop service sets return_to_start=true.
@@ -66,84 +100,159 @@
       <Sequence name="ReturnBranch">
         <ReturnToStartCondition return_to_start="{return_to_start}"/>
         <ReturnToStart start_pose="{start_pose}" goal="{nav_goal}"/>
-        <NavigateToPose goal="{nav_goal}"/>
+        <NavigateToPose goal="{nav_goal}" server_timeout="2000"/>
       </Sequence>
 
-      <!-- ─── Exploration pipeline ─────────────────────────────────────── -->
-      <PipelineSequence name="ExplorationPipeline">
+      <!-- ─── Phase sequence: Exploration → Wall Inspection ────────────────
+           A stateful BT Sequence that runs Phase 1 first and, only after
+           exploration completes, automatically starts Phase 2.
 
-        <!-- Rate-limited frontier search + scoring + goal selection ──────── -->
-        <RateController hz="1.0">
-          <Sequence>
+           Phase 1 (ForceSuccess + KeepRunningUntilFailure + ExplorationPipeline):
+             KeepRunningUntilFailure converts each successful navigation leg
+             (PipelineSequence SUCCESS) into RUNNING, keeping the tree alive
+             between legs.  When SelectFrontier exhausts all frontiers it sets
+             exploration_done=true and returns FAILURE.  That FAILURE propagates
+             through KeepRunningUntilFailure and is converted by ForceSuccess to
+             SUCCESS, signalling the outer Sequence to advance to Phase 2.
 
-            <!-- 1. Search for frontier clusters (incremental wavefront BFS) -->
-            <SearchFrontiers
+           Phase 2 (KeepRunningUntilFailure + InspectionPipeline):
+             SelectWallViewpointNode scans the completed map for wall-boundary
+             cells (lethal cells adjacent to free space), generates one viewpoint
+             per wall segment, and pops them one at a time.  Each viewpoint is
+             navigated to with 3 retries (skipped silently on failure).  When all
+             viewpoints are consumed, SelectWallViewpoint returns FAILURE →
+             InspectionPipeline (Sequence) FAILURE → KRUF propagates FAILURE →
+             PhaseSequence FAILURE → MainFallback FAILURE → tree terminates.
+      -->
+      <Sequence name="PhaseSequence">
+
+        <!-- ── Phase 1: Frontier Exploration ─────────────────────────────── -->
+        <!--
+          ForceSuccess converts the terminal FAILURE from KeepRunningUntilFailure
+          (which occurs when SelectFrontier finds no more frontiers) into SUCCESS
+          so the outer Sequence advances to Phase 2 without stopping the tree.
+        -->
+        <ForceSuccess name="ExplorationPhase">
+          <KeepRunningUntilFailure>
+            <PipelineSequence name="ExplorationPipeline">
+
+              <!-- Rate-limited frontier search + scoring + goal selection ─── -->
+              <RateController hz="1.0">
+                <Sequence>
+
+                  <!-- 1. Search for frontier clusters (wavefront BFS) -->
+                  <SearchFrontiers
+                    robot_pose="{robot_pose}"
+                    frontiers="{frontiers}"/>
+
+                  <!-- 2. Score each frontier using InformationGain + Euclidean -->
+                  <AssignCosts
+                    frontiers="{frontiers}"
+                    robot_pose="{robot_pose}"
+                    scored_frontiers="{scored_frontiers}"/>
+
+                  <!-- 3. Select best non-visited, non-blacklisted frontier (with hysteresis).
+                       Writes the chosen pose directly to nav_goal so the
+                       downstream NavigateToPose node can navigate there.
+                       Returns FAILURE (sets exploration_done=true) when no
+                       viable frontiers remain.
+                       visited_frontiers: permanently excludes already-reached
+                       goals so the robot cannot get stuck re-emitting a goal
+                       it has already navigated to. -->
+                  <SelectFrontier
+                    scored_frontiers="{scored_frontiers}"
+                    robot_pose="{robot_pose}"
+                    blacklisted_goals="{blacklisted_goals}"
+                    visited_frontiers="{visited_frontiers}"
+                    nav_goal="{nav_goal}"
+                    exploration_done="{exploration_done}"/>
+
+                </Sequence>
+              </RateController>
+
+              <!-- Navigation: mark visited on success, blacklist on persistent failure ──
+                ForceSuccess (NavAndMark):
+                  Fallback
+                    Child 1 — Sequence (success path):
+                               RetryUntilSuccessful: 3 nav attempts.
+                               Returns SUCCESS if any attempt succeeds.
+                               Returns FAILURE after all 3 fail.
+                               MarkFrontierVisited: only reached when nav
+                               succeeded — records the goal in visited_frontiers
+                               so SelectFrontier resets hysteresis and moves on.
+                    Child 2 — BlacklistFrontier: only reached when Sequence
+                               (success path) fails (all 3 nav attempts failed).
+                               Marks the frontier unreachable; always SUCCESS.
+
+                ForceSuccess ensures NavAndMark always returns SUCCESS so the
+                PipelineSequence returns SUCCESS (one leg done).  KRUF converts
+                that SUCCESS into RUNNING, keeping the tree alive for the next
+                frontier selection.
+              -->
+              <ForceSuccess name="NavAndMark">
+                <Fallback>
+                  <!-- Success path: navigate then permanently mark as visited -->
+                  <Sequence>
+                    <RetryUntilSuccessful num_attempts="3">
+                      <NavigateToPose goal="{nav_goal}" server_timeout="2000"/>
+                    </RetryUntilSuccessful>
+                    <MarkFrontierVisited
+                      goal="{nav_goal}"
+                      visited_frontiers="{visited_frontiers}"/>
+                  </Sequence>
+                  <!-- Failure path: only reached when all 3 nav attempts failed -->
+                  <BlacklistFrontier
+                    goal="{nav_goal}"
+                    blacklisted_goals="{blacklisted_goals}"/>
+                </Fallback>
+              </ForceSuccess>
+
+            </PipelineSequence>
+          </KeepRunningUntilFailure>
+        </ForceSuccess>
+        <!-- End Phase 1 ──────────────────────────────────────────────────── -->
+
+        <!-- ── Phase 2: Wall Inspection ──────────────────────────────────── -->
+        <!--
+          KeepRunningUntilFailure keeps the inspection pipeline alive between
+          viewpoint legs.  The InspectionPipeline uses a plain (stateful)
+          Sequence:
+            - child[0] (SelectWallViewpoint) is ticked once at the START of
+              each leg because the Sequence skips already-succeeded children
+              while child[1] is RUNNING.  It computes the viewpoint list once
+              from the completed map, then pops one viewpoint per leg.
+            - child[1] (ForceSuccess + RetryUntilSuccessful + NavigateToPose)
+              navigates to the viewpoint (3 retries); silently skips the
+              viewpoint if all 3 attempts fail.
+
+          When SelectWallViewpoint exhausts the list it sets inspection_done=
+          true and returns FAILURE → Sequence FAILURE → KRUF FAILURE →
+          PhaseSequence FAILURE → MainFallback FAILURE → tree terminates.
+        -->
+        <KeepRunningUntilFailure>
+          <Sequence name="InspectionPipeline">
+
+            <!-- Pop the next wall viewpoint (computed once on first tick) -->
+            <SelectWallViewpoint
               robot_pose="{robot_pose}"
-              frontiers="{frontiers}"/>
-
-            <!-- 2. Score each frontier using InformationGain + Euclidean -->
-            <AssignCosts
-              frontiers="{frontiers}"
-              robot_pose="{robot_pose}"
-              scored_frontiers="{scored_frontiers}"/>
-
-            <!-- 3. Select best non-blacklisted frontier (with hysteresis).
-                 Writes the chosen pose directly to nav_goal so the downstream
-                 NavigateToPose node (Nav2 built-in) can navigate there. -->
-            <SelectFrontier
-              scored_frontiers="{scored_frontiers}"
-              robot_pose="{robot_pose}"
-              blacklisted_goals="{blacklisted_goals}"
               nav_goal="{nav_goal}"
-              exploration_done="{exploration_done}"/>
+              inspection_done="{inspection_done}"/>
+
+            <!-- Navigate to the viewpoint (3 retries; skip silently on failure) -->
+            <ForceSuccess name="NavToWall">
+              <RetryUntilSuccessful num_attempts="3">
+                <NavigateToPose goal="{nav_goal}" server_timeout="2000"/>
+              </RetryUntilSuccessful>
+            </ForceSuccess>
 
           </Sequence>
-        </RateController>
+        </KeepRunningUntilFailure>
+        <!-- End Phase 2 ──────────────────────────────────────────────────── -->
 
-        <!-- Navigation — blacklist only on failure ──────────────────────────
-          ForceSuccess (NavAndMark):
-            A Fallback with two children:
-              Child 1 — RetryUntilSuccessful:
-                           Tries to navigate up to 3 times.
-                           Returns SUCCESS if any attempt succeeds.
-                           Returns FAILURE only after all attempts fail.
-              Child 2 — BlacklistFrontier:
-                           Only reached when all 3 nav attempts failed.
-                           Marks the frontier unreachable so it is skipped
-                           on future ticks.  Always returns SUCCESS so the
-                           Fallback (and ForceSuccess) return SUCCESS too.
+      </Sequence>
+      <!-- End PhaseSequence ────────────────────────────────────────────────── -->
 
-          On navigation SUCCESS the Fallback short-circuits at child 1 and
-          BlacklistFrontier never runs.  Blacklisting on success is
-          unnecessary: once the robot reaches a frontier its sensors map the
-          area, and the wavefront detector naturally stops reporting that
-          position as a frontier on the next update.
-
-          ForceSuccess ensures NavAndMark always returns SUCCESS so the
-          PipelineSequence keeps ticking.  The tree only truly terminates when
-          SelectFrontier returns FAILURE (exploration_done=true — no more
-          viable frontiers).
-
-          Recovery: if SelectFrontier finds that ALL remaining frontiers are
-          blacklisted (but above the score threshold), it removes only the
-          blacklist entry for the best of those frontiers and retries rather
-          than immediately declaring exploration_done=true.
-        -->
-        <ForceSuccess name="NavAndMark">
-          <Fallback>
-            <RetryUntilSuccessful num_attempts="3">
-              <NavigateToPose goal="{nav_goal}"/>
-            </RetryUntilSuccessful>
-            <!-- Only reached when all 3 attempts failed: -->
-            <BlacklistFrontier
-              goal="{nav_goal}"
-              blacklisted_goals="{blacklisted_goals}"/>
-          </Fallback>
-        </ForceSuccess>
-
-      </PipelineSequence>
-
-    </Fallback>
+    </ReactiveFallback>
 
   </BehaviorTree>
 

@@ -46,15 +46,17 @@ void WavefrontFrontierDetector::initialize(
   node->declare_parameter(prefix + "min_frontier_size",   rclcpp::ParameterValue(3));
   node->declare_parameter(prefix + "clustering_distance", rclcpp::ParameterValue(0.5));
   node->declare_parameter(prefix + "search_distance",     rclcpp::ParameterValue(10.0));
+  node->declare_parameter(prefix + "seed_search_radius_m", rclcpp::ParameterValue(0.5));
 
-  min_frontier_size_   = node->get_parameter(prefix + "min_frontier_size").as_int();
-  clustering_distance_ = node->get_parameter(prefix + "clustering_distance").as_double();
-  search_distance_     = node->get_parameter(prefix + "search_distance").as_double();
+  min_frontier_size_    = node->get_parameter(prefix + "min_frontier_size").as_int();
+  clustering_distance_  = node->get_parameter(prefix + "clustering_distance").as_double();
+  search_distance_      = node->get_parameter(prefix + "search_distance").as_double();
+  seed_search_radius_m_ = node->get_parameter(prefix + "seed_search_radius_m").as_double();
 
   RCLCPP_INFO(logger_,
     "WavefrontFrontierDetector initialised [min_size=%d, cluster_dist=%.2f m, "
-    "search_dist=%.2f m]",
-    min_frontier_size_, clustering_distance_, search_distance_);
+    "search_dist=%.2f m, seed_radius=%.2f m]",
+    min_frontier_size_, clustering_distance_, search_distance_, seed_search_radius_m_);
 }
 
 // ─── Search ───────────────────────────────────────────────────────────────────
@@ -116,6 +118,13 @@ std::vector<std::pair<int, int>> WavefrontFrontierDetector::detectFrontierCells(
   const double res = costmap.metadata.resolution;
   const auto & data = costmap.data;
 
+  if (res <= 0.0) {
+    RCLCPP_WARN(logger_,
+      "WavefrontFrontierDetector: costmap has invalid resolution (%.6f) — "
+      "skipping frontier search this tick.", res);
+    return {};
+  }
+
   // Max search radius in cells (0 = unlimited)
   const int max_radius_cells =
     (search_distance_ > 0.0) ? static_cast<int>(search_distance_ / res) : INT_MAX;
@@ -134,18 +143,20 @@ std::vector<std::pair<int, int>> WavefrontFrontierDetector::detectFrontierCells(
 
   // Seed the BFS from the robot's cell if it is free.  If the robot's cell is
   // UNKNOWN or LETHAL (e.g. immediately after a costmap resize when new cells
-  // have not yet been filled in by the static layer), search an expanding
-  // square ring of up to MAX_SEED_SEARCH_RADIUS cells around the robot to
-  // find the nearest free seed cell.  A square ring is used (only the border
-  // of each r×r square is visited) to avoid re-checking interior cells while
-  // still covering all eight compass directions at each radius step.
-  // This prevents a transient UNKNOWN cell from producing zero frontiers and
-  // prematurely terminating exploration.
-  constexpr int MAX_SEED_SEARCH_RADIUS = 5;
+  // have not yet been filled in by the static layer, or when the robot's own
+  // inflation footprint marks the immediate surroundings as LETHAL), search an
+  // expanding square ring of up to seed_search_radius_m_ (converted to cells)
+  // around the robot to find the nearest free seed cell.  A square ring is used
+  // (only the border of each r×r square is visited) to avoid re-checking
+  // interior cells while still covering all eight compass directions at each
+  // radius step.  This prevents a transient UNKNOWN cell from producing zero
+  // frontiers and prematurely terminating exploration.
+  const int seed_search_radius_cells =
+    std::max(1, static_cast<int>(std::ceil(seed_search_radius_m_ / res)));
   {
     int seed_gx = robot_gx, seed_gy = robot_gy;
     bool seed_found = false;
-    for (int r = 0; r <= MAX_SEED_SEARCH_RADIUS && !seed_found; ++r) {
+    for (int r = 0; r <= seed_search_radius_cells && !seed_found; ++r) {
       for (int ddy = -r; ddy <= r && !seed_found; ++ddy) {
         for (int ddx = -r; ddx <= r && !seed_found; ++ddx) {
           // On the first iteration (r==0) visit the centre; on subsequent
@@ -171,8 +182,9 @@ std::vector<std::pair<int, int>> WavefrontFrontierDetector::detectFrontierCells(
     } else {
       RCLCPP_WARN(logger_,
         "WavefrontFrontierDetector: robot cell and all neighbours "
-        "(radius %d) are UNKNOWN or LETHAL — skipping frontier search this tick.",
-        MAX_SEED_SEARCH_RADIUS);
+        "(radius %d cells / %.2f m) are UNKNOWN or LETHAL — skipping frontier search this tick. "
+        "Consider increasing wavefront_frontier_detector.seed_search_radius_m.",
+        seed_search_radius_cells, seed_search_radius_m_);
     }
   }
 

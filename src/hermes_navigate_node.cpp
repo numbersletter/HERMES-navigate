@@ -34,6 +34,8 @@
 #include "hermes_navigate/bt_plugins/select_frontier_node.hpp"
 #include "hermes_navigate/bt_plugins/return_to_start_node.hpp"
 #include "hermes_navigate/bt_plugins/blacklist_frontier_node.hpp"
+#include "hermes_navigate/bt_plugins/mark_frontier_visited_node.hpp"
+#include "hermes_navigate/bt_plugins/select_wall_viewpoint_node.hpp"
 
 namespace hermes_navigate
 {
@@ -217,10 +219,13 @@ HermesNavigateNode::on_configure(const rclcpp_lifecycle::State &)
   blackboard_ = BT::Blackboard::create();
   blackboard_->set("start_pose",        start_pose_);
   blackboard_->set("exploration_done",  false);
+  blackboard_->set("inspection_done",   false);
   blackboard_->set("return_to_start",   false);
   blackboard_->set("nav_goal",          start_pose_);  // initialise to avoid unset port errors
   blackboard_->set("blacklisted_goals",
     std::vector<geometry_msgs::msg::PoseStamped>{});  // grows as Nav2 fails
+  blackboard_->set("visited_frontiers",
+    std::vector<geometry_msgs::msg::PoseStamped>{});  // grows as frontiers are reached
 
   // Nav2 BT action/service nodes (e.g. NavigateToPoseAction) retrieve these
   // entries from the blackboard in their constructors.  "node" must be a plain
@@ -229,7 +234,16 @@ HermesNavigateNode::on_configure(const rclcpp_lifecycle::State &)
     std::string(get_name()) + "_bt_client",
     rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(true));
   blackboard_->set("node",                    bt_client_node_);
-  blackboard_->set("bt_loop_duration",        std::chrono::milliseconds(10));
+  // bt_loop_duration is used by Nav2's BtActionNode as the per-attempt timeout
+  // for receiving a goal acknowledgement from the action server.  The default
+  // of 10 ms is too short during the Phase 1 → Phase 2 transition when Nav2 is
+  // still processing a goal cancellation and takes up to ~2 s to ack the next
+  // goal.  A short timeout causes NavigateToPose to fail immediately, which
+  // makes RetryUntilSuccessful loop all 3 retries within a single BT tick and
+  // flood Nav2 with rapid-fire preempting goals.  2 000 ms is generous enough
+  // to cover any transient Nav2 latency while still responding quickly in
+  // practice (the ack almost always arrives within tens of milliseconds).
+  blackboard_->set("bt_loop_duration",        std::chrono::milliseconds(2000));
   blackboard_->set("wait_for_service_timeout", std::chrono::milliseconds(1000));
 
   // ── Register BT nodes with this node as context ───────────────────────────
@@ -255,6 +269,8 @@ HermesNavigateNode::on_configure(const rclcpp_lifecycle::State &)
   SelectFrontierNode::registerWithFactory(factory_, self);
   ReturnToStartNode::registerWithFactory(factory_, get_logger());
   BlacklistFrontierNode::registerWithFactory(factory_, get_logger());
+  MarkFrontierVisitedNode::registerWithFactory(factory_, get_logger());
+  SelectWallViewpointNode::registerWithFactory(factory_, self);
 
   // ── Load BT tree from XML ─────────────────────────────────────────────────
   if (!loadBehaviorTree(bt_xml_file_)) {
@@ -284,9 +300,12 @@ HermesNavigateNode::on_activate(const rclcpp_lifecycle::State &)
 {
   RCLCPP_INFO(get_logger(), "HermesNavigateNode: activating — exploration begins.");
 
-  // Reset exploration state on the blackboard.
+  // Reset exploration and inspection state on the blackboard.
   blackboard_->set("return_to_start",  false);
   blackboard_->set("exploration_done", false);
+  blackboard_->set("inspection_done",  false);
+  blackboard_->set("visited_frontiers",
+    std::vector<geometry_msgs::msg::PoseStamped>{});
 
   // Start the BT tick timer.
   auto period_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -393,6 +412,16 @@ bool HermesNavigateNode::loadBehaviorTree(const std::string & bt_xml_path)
 
 void HermesNavigateNode::tickTree()
 {
+  // Drive bt_client_node_'s executor so that any pending Nav2 callbacks (goal
+  // acknowledgements, navigation results, cancel responses) are dispatched
+  // before the BT tick runs.  Without this, callbacks queued since the
+  // previous tick — e.g. the ~1 ms goal-ack from the navigate_to_pose action
+  // server — would not be processed and NavigateToPose BT nodes would see a
+  // stale future on the current tick.
+  if (bt_client_node_) {
+    rclcpp::spin_some(bt_client_node_);
+  }
+
   // Update robot pose on the blackboard from the latest subscription message.
   if (!latest_pose_.header.frame_id.empty()) {
     blackboard_->set("robot_pose", latest_pose_);
@@ -404,41 +433,32 @@ void HermesNavigateNode::tickTree()
     if (status == BT::NodeStatus::RUNNING) {
       RCLCPP_DEBUG(get_logger(), "HermesNavigateNode: BT tick → RUNNING.");
     } else if (status == BT::NodeStatus::FAILURE) {
-      // FAILURE during exploration means SelectFrontier found no viable frontier
-      // (exploration_done=true) or an unexpected error occurred.  Either way,
-      // stop ticking.
+      // FAILURE means both phases are complete (exploration_done=true AND
+      // inspection_done=true after all wall viewpoints are visited) or an
+      // unexpected error occurred.  Either way, stop ticking.
+      // With KeepRunningUntilFailure wrapping each phase pipeline, successful
+      // navigation legs are converted to RUNNING and never reach here — only a
+      // true end-of-phase FAILURE does.
       bool exploration_done = false;
-      if (!blackboard_->get("exploration_done", exploration_done)) {
-        RCLCPP_WARN(get_logger(),
-          "HermesNavigateNode: 'exploration_done' key missing from blackboard; "
-          "assuming false.");
-      }
+      bool inspection_done  = false;
+      blackboard_->get("exploration_done", exploration_done);
+      blackboard_->get("inspection_done",  inspection_done);
       RCLCPP_INFO(get_logger(),
         "HermesNavigateNode: BT finished with status FAILURE "
-        "(exploration_done=%s). Stopping tick timer.",
-        exploration_done ? "true" : "false");
+        "(exploration_done=%s, inspection_done=%s). Stopping tick timer.",
+        exploration_done ? "true" : "false",
+        inspection_done  ? "true" : "false");
       tick_timer_->cancel();
     } else if (status == BT::NodeStatus::SUCCESS) {
-      // SUCCESS during the return-to-start branch means the robot has reached
-      // its start pose — stop ticking.  SUCCESS during normal exploration just
-      // means one navigation leg finished; keep the timer running so the robot
-      // immediately selects and navigates to the next frontier.
-      bool return_to_start = false;
-      if (!blackboard_->get("return_to_start", return_to_start)) {
-        RCLCPP_WARN(get_logger(),
-          "HermesNavigateNode: 'return_to_start' key missing from blackboard; "
-          "treating as false (continue exploration).");
-      }
-      if (return_to_start) {
-        RCLCPP_INFO(get_logger(),
-          "HermesNavigateNode: BT finished with status SUCCESS (returned to start). "
-          "Stopping tick timer.");
-        tick_timer_->cancel();
-      } else {
-        RCLCPP_INFO(get_logger(),
-          "HermesNavigateNode: BT tick → SUCCESS (navigation leg complete). "
-          "Continuing exploration.");
-      }
+      // SUCCESS means the return-to-start branch completed: the robot has
+      // reached its start pose.  With KeepRunningUntilFailure wrapping the
+      // exploration pipeline, exploration legs can never produce SUCCESS here —
+      // they are converted to RUNNING by the decorator, so the tree stays alive
+      // between legs without any manual restart.
+      RCLCPP_INFO(get_logger(),
+        "HermesNavigateNode: BT finished with status SUCCESS (returned to start). "
+        "Stopping tick timer.");
+      tick_timer_->cancel();
     }
   } catch (const std::exception & e) {
     RCLCPP_ERROR(get_logger(), "HermesNavigateNode: BT tick threw: %s", e.what());
