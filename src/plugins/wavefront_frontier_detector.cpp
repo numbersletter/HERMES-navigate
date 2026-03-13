@@ -165,13 +165,20 @@ std::vector<std::pair<int, int>> WavefrontFrontierDetector::detectFrontierCells(
             continue;
           }
           int nx = robot_gx + ddx, ny = robot_gy + ddy;
-          if (inBounds(nx, ny) &&
-            data[static_cast<std::size_t>(idx(nx, ny))] != UNKNOWN &&
-            data[static_cast<std::size_t>(idx(nx, ny))] < LETHAL)
-          {
-            seed_gx = nx;
-            seed_gy = ny;
-            seed_found = true;
+          if (inBounds(nx, ny)) {
+            // Cast to uint8_t before comparing: costmap data is int8_t, but
+            // UNKNOWN (255) and LETHAL (253) are uint8_t constants.  Without
+            // the cast, signed promotion makes UNKNOWN (-1 as int8_t) pass
+            // both "!= UNKNOWN" and "< LETHAL" and enter the BFS as a free
+            // seed, causing exactly one spurious frontier cell that is then
+            // rejected by min_frontier_size — producing total=0 frontiers.
+            const uint8_t cell =
+              static_cast<uint8_t>(data[static_cast<std::size_t>(idx(nx, ny))]);
+            if (cell != UNKNOWN && cell < LETHAL) {
+              seed_gx = nx;
+              seed_gy = ny;
+              seed_found = true;
+            }
           }
         }
       }
