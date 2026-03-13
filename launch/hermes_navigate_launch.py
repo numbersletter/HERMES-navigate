@@ -52,10 +52,12 @@ def generate_launch_description():
     pkg_nav2_bringup    = get_package_share_directory("nav2_bringup")
 
     # ── Paths to config / resource files ─────────────────────────────────────
-    sdf_xacro_file   = os.path.join(pkg_hermes_navigate, "urdf", "hermes_sim.sdf.xacro")
+    # sdf_xacro_file   = os.path.join(pkg_hermes_navigate, "urdf", "hermes_sim.sdf.xacro")
     nav2_params_file = os.path.join(pkg_hermes_navigate, "config", "nav2_params.yaml")
     slam_params_file = os.path.join(pkg_hermes_navigate, "config",
                                     "slam_toolbox_params.yaml")
+    ekf_params      = os.path.join(pkg_hermes_navigate, "config",
+                                   "ekf.yaml")
     plugin_params    = os.path.join(pkg_hermes_navigate, "params", "plugin_params.yaml")
     explore_bt_file  = os.path.join(pkg_hermes_navigate, "behavior_trees",
                                     "hermes_exploration_bt.xml")
@@ -71,32 +73,43 @@ def generate_launch_description():
 
     use_sim_time = LaunchConfiguration("use_sim_time")
 
-    # ── Robot description (process SDF xacro) ────────────────────────────────
-    robot_description_content = xacro.process_file(sdf_xacro_file).toxml()
+    # # ── Robot description (process SDF xacro) ────────────────────────────────
+    # robot_description_content = xacro.process_file(sdf_xacro_file).toxml()
 
-    # ── robot_state_publisher ─────────────────────────────────────────────────
-    robot_state_pub = Node(
-        package="robot_state_publisher",
-        executable="robot_state_publisher",
-        name="robot_state_publisher",
-        output="screen",
-        parameters=[{
-            "robot_description": robot_description_content,
-            "use_sim_time":      use_sim_time,
-        }],
-    )
+    # # ── robot_state_publisher ─────────────────────────────────────────────────
+    # robot_state_pub = Node(
+    #     package="robot_state_publisher",
+    #     executable="robot_state_publisher",
+    #     name="robot_state_publisher",
+    #     output="screen",
+    #     parameters=[{
+    #         "robot_description": robot_description_content,
+    #         "use_sim_time":      use_sim_time,
+    #     }],
+    # )
 
     # ── SLAM Toolbox (online async) ───────────────────────────────────────────
-    slam_toolbox_node = Node(
-        package="slam_toolbox",
-        executable="async_slam_toolbox_node",
-        name="slam_toolbox",
-        output="screen",
-        parameters=[
-            slam_params_file,
-            {"use_sim_time": use_sim_time},
-        ],
+    slam_toolbox_node = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                get_package_share_directory("slam_toolbox"),
+                "launch",
+                "online_async_launch.py"
+            )
+        ),
+        launch_arguments={
+            "use_sim_time": use_sim_time,
+            "slam_params_file": slam_params_file,
+        }.items(),
     )
+
+    # ekf_node = Node(
+    #     package="robot_localization",
+    #     executable="ekf_node",
+    #     name="ekf_filter_node",
+    #     output="screen",
+    #     parameters=[ekf_params],
+    # )
 
     # ── Nav2 Bringup ──────────────────────────────────────────────────────────
     nav2_bringup = IncludeLaunchDescription(
@@ -125,23 +138,7 @@ def generate_launch_description():
         ],
     )
 
-    # ── Coverage Tracker Node (lifecycle) ─────────────────────────────────────
-    coverage_tracker = LifecycleNode(
-        package="hermes_navigate",
-        executable="coverage_tracker_node",
-        name="coverage_tracker_node",
-        namespace="",
-        output="screen",
-        parameters=[{
-            "camera_fov_deg":     60.0,
-            "camera_max_range_m": 5.0,
-            "update_rate_hz":     10.0,
-            "base_frame":         "base_link",
-            "map_frame":          "map",
-            "camera_yaw_offset":  0.0,
-            "use_sim_time":       use_sim_time,
-        }],
-    )
+
 
     # ── Lifecycle manager ─────────────────────────────────────────────────────
     # Manages hermes_navigate_node and coverage_tracker_node.
@@ -156,7 +153,6 @@ def generate_launch_description():
             "autostart":    True,
             "node_names": [
                 "hermes_navigate_node",
-                "coverage_tracker_node",
             ],
         }],
     )
@@ -165,12 +161,11 @@ def generate_launch_description():
         declare_use_sim_time,
         declare_log_level,
 
-        robot_state_pub,
         slam_toolbox_node,
         nav2_bringup,
-
+        # ekf_node,
+        
         hermes_navigate,
-        coverage_tracker,
         lifecycle_manager,
 
         LogInfo(msg="HERMES navigate stack launched."),
