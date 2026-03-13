@@ -197,7 +197,10 @@ def generate_launch_description():
         executable="ekf_node",
         name="ekf_filter_node",
         output="screen",
-        parameters=[ekf_params],
+        parameters=[
+            ekf_params,
+            {"use_sim_time": True},
+        ],
     )
 
     # ── 6. Nav2 (navigation stack) ────────────────────────────────────────────

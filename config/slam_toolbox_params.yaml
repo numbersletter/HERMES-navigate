@@ -36,6 +36,7 @@ slam_toolbox:
     minimum_travel_distance: 0.05   # 4x4 ft space; create keyframes every 5 cm
     minimum_travel_heading: 0.10    # and every ~6 deg turn
 
+
     # ── Scan matching ────────────────────────────────────────────────────────
     scan_buffer_size: 20
     scan_buffer_maximum_scan_distance: 1.5   # slightly larger than enclosure diagonal (~1.73 m)
