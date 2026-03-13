@@ -12,7 +12,7 @@ bt_navigator:
     global_frame: map
     robot_base_frame: base_link
     odom_topic: /odom
-# diff_drive + rf2o_laser → EKF → /odometry/filtered + odom→base_link TF → Nav2
+# Simulation uses standard wheel odometry on /odom (EKF disabled).
     
     error_code_names:
       - compute_path_error_code
