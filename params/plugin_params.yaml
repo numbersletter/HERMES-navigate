@@ -74,12 +74,12 @@ hermes_navigate_node:
 
     # ── SelectFrontierNode parameters ─────────────────────────────────────────
     select_frontier:
-      hysteresis_factor:   0.10   # Fraction above current score needed to switch goal.
+      hysteresis_factor:   0.01   # Fraction above current score needed to switch goal.
                                   # Reduced from 0.15 so the robot re-evaluates frontiers
                                   # more readily in a small, rapidly-changing costmap.
       min_frontier_score:  0.0    # Minimum composite score to consider a frontier viable
                                   # (0.0 = accept any frontier with non-negative score)
-      blacklist_radius_m:  0.15   # Exclusion radius (m) around each blacklisted/visited
+      blacklist_radius_m:  0.10   # Exclusion radius (m) around each blacklisted/visited
                                   # position.  0.5 m in a 1.22 m enclosure would exclude
                                   # >50% of free space after a single visited frontier.
                                   # 0.15 m (= ~6 cells at 0.025 m/cell) is a tight but
