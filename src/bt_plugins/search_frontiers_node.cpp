@@ -81,6 +81,10 @@ BT::NodeStatus SearchFrontiersNode::tick()
 {
   auto node = parent_.lock();
 
+  if (node) {
+    RCLCPP_INFO(node->get_logger(), "SearchFrontiersNode: tick.");
+  }
+
   if (!latest_costmap_) {
     if (node) {
       RCLCPP_WARN(node->get_logger(),

@@ -68,6 +68,19 @@ BT::NodeStatus SelectFrontierNode::tick()
 {
   auto node = parent_.lock();
 
+  if (node) {
+    if (has_active_goal_) {
+      RCLCPP_INFO(node->get_logger(),
+        "SelectFrontierNode: current selected frontier -> (%.2f, %.2f) [score=%.1f].",
+        active_goal_.pose.position.x,
+        active_goal_.pose.position.y,
+        active_goal_score_);
+    } else {
+      RCLCPP_INFO(node->get_logger(),
+        "SelectFrontierNode: no frontier currently selected.");
+    }
+  }
+
   auto scored_res = getInput<std::vector<ScoredFrontier>>("scored_frontiers");
   if (!scored_res) {
     if (node) {
