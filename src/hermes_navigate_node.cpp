@@ -34,6 +34,7 @@
 #include "hermes_navigate/bt_plugins/select_frontier_node.hpp"
 #include "hermes_navigate/bt_plugins/return_to_start_node.hpp"
 #include "hermes_navigate/bt_plugins/blacklist_frontier_node.hpp"
+#include "hermes_navigate/bt_plugins/mark_frontier_visited_node.hpp"
 #include "hermes_navigate/bt_plugins/select_wall_viewpoint_node.hpp"
 
 namespace hermes_navigate
@@ -223,6 +224,8 @@ HermesNavigateNode::on_configure(const rclcpp_lifecycle::State &)
   blackboard_->set("nav_goal",          start_pose_);  // initialise to avoid unset port errors
   blackboard_->set("blacklisted_goals",
     std::vector<geometry_msgs::msg::PoseStamped>{});  // grows as Nav2 fails
+  blackboard_->set("visited_frontiers",
+    std::vector<geometry_msgs::msg::PoseStamped>{});  // grows as frontiers are reached
 
   // Nav2 BT action/service nodes (e.g. NavigateToPoseAction) retrieve these
   // entries from the blackboard in their constructors.  "node" must be a plain
@@ -257,6 +260,7 @@ HermesNavigateNode::on_configure(const rclcpp_lifecycle::State &)
   SelectFrontierNode::registerWithFactory(factory_, self);
   ReturnToStartNode::registerWithFactory(factory_, get_logger());
   BlacklistFrontierNode::registerWithFactory(factory_, get_logger());
+  MarkFrontierVisitedNode::registerWithFactory(factory_, get_logger());
   SelectWallViewpointNode::registerWithFactory(factory_, self);
 
   // ── Load BT tree from XML ─────────────────────────────────────────────────
@@ -291,6 +295,8 @@ HermesNavigateNode::on_activate(const rclcpp_lifecycle::State &)
   blackboard_->set("return_to_start",  false);
   blackboard_->set("exploration_done", false);
   blackboard_->set("inspection_done",  false);
+  blackboard_->set("visited_frontiers",
+    std::vector<geometry_msgs::msg::PoseStamped>{});
 
   // Start the BT tick timer.
   auto period_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(

@@ -56,6 +56,7 @@ BT::PortsList SelectFrontierNode::providedPorts()
     BT::InputPort<std::vector<ScoredFrontier>>("scored_frontiers"),
     BT::InputPort<geometry_msgs::msg::PoseStamped>("robot_pose"),
     BT::BidirectionalPort<std::vector<geometry_msgs::msg::PoseStamped>>("blacklisted_goals"),
+    BT::InputPort<std::vector<geometry_msgs::msg::PoseStamped>>("visited_frontiers"),
     BT::OutputPort<geometry_msgs::msg::PoseStamped>("nav_goal"),
     BT::OutputPort<bool>("exploration_done"),
   };
@@ -87,13 +88,36 @@ BT::NodeStatus SelectFrontierNode::tick()
     blacklist = bl_res.value();
   }
 
+  // Read the visited list (may be absent on the very first tick).
+  std::vector<geometry_msgs::msg::PoseStamped> visited;
+  auto vf_res =
+    getInput<std::vector<geometry_msgs::msg::PoseStamped>>("visited_frontiers");
+  if (vf_res) {
+    visited = vf_res.value();
+  }
+
+  // Helper: returns true if the given pose is within blacklist_radius_m of any
+  // visited frontier.  Visited frontiers are permanently excluded — the robot
+  // should never return to an already-explored position.
+  // Uses squared-distance comparison to avoid sqrt in the inner loop.
+  const double radius_sq = blacklist_radius_m_ * blacklist_radius_m_;
+  auto is_visited = [&](const geometry_msgs::msg::PoseStamped & pose) -> bool {
+    for (const auto & v : visited) {
+      const double dx = pose.pose.position.x - v.pose.position.x;
+      const double dy = pose.pose.position.y - v.pose.position.y;
+      if ((dx * dx + dy * dy) < radius_sq) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   // Helper: returns true if the given goal pose is too close to any blacklisted
   // position and should therefore be excluded from selection.
   // Uses squared-distance comparison to avoid sqrt in the inner loop.
   // Note: this check is O(blacklist_size) per frontier; in typical exploration
   // runs the blacklist remains small (single-digit entries), so this is not a
   // performance concern in practice.
-  const double radius_sq = blacklist_radius_m_ * blacklist_radius_m_;
   auto is_blacklisted = [&](const geometry_msgs::msg::PoseStamped & pose) -> bool {
     for (const auto & bl : blacklist) {
       const double dx = pose.pose.position.x - bl.pose.position.x;
@@ -104,6 +128,21 @@ BT::NodeStatus SelectFrontierNode::tick()
     }
     return false;
   };
+
+  // If the currently tracked goal was visited (successfully navigated to),
+  // reset hysteresis so a fresh frontier can be selected on this tick.
+  // This is the core fix: without this reset the robot would keep emitting the
+  // same nav_goal even after arriving, because the old high score would block
+  // all other frontiers from passing the hysteresis threshold.
+  if (has_active_goal_ && is_visited(active_goal_)) {
+    if (node) {
+      RCLCPP_INFO(node->get_logger(),
+        "SelectFrontierNode: active goal (%.2f, %.2f) is now visited — "
+        "resetting hysteresis to allow new frontier selection.",
+        active_goal_.pose.position.x, active_goal_.pose.position.y);
+    }
+    has_active_goal_ = false;
+  }
 
   // If the currently tracked goal was blacklisted, reset hysteresis so a fresh
   // frontier can be selected on this tick.
@@ -116,13 +155,17 @@ BT::NodeStatus SelectFrontierNode::tick()
     has_active_goal_ = false;
   }
 
-  // Find the best viable (above-threshold, non-blacklisted) frontier.
+  // Find the best viable (above-threshold, non-visited, non-blacklisted) frontier.
   const ScoredFrontier * best = nullptr;
   std::size_t n_below_threshold = 0;
+  std::size_t n_visited = 0;
   std::size_t n_blacklisted = 0;
   for (const auto & sf : scored) {
     if (sf.score < min_frontier_score_) {
       ++n_below_threshold;
+    } else if (is_visited(sf.frontier.goal_pose)) {
+      // Permanently excluded — visited frontiers are never retried.
+      ++n_visited;
     } else if (is_blacklisted(sf.frontier.goal_pose)) {
       ++n_blacklisted;
     } else if (!best || sf.score > best->score) {
@@ -132,14 +175,18 @@ BT::NodeStatus SelectFrontierNode::tick()
 
   if (!best) {
     // If there are frontiers that are above the score threshold but only
-    // excluded because they were previously blacklisted, fall back to
-    // selecting the best of those rather than halting exploration.  Only the
-    // blacklist entries near the chosen frontier are removed so that other
-    // genuinely unreachable positions remain excluded.
+    // excluded because they were previously blacklisted (NOT visited), fall
+    // back to selecting the best of those rather than halting exploration.
+    // Visited frontiers are permanently excluded and never retried here.
+    // Only the blacklist entries near the chosen frontier are removed so that
+    // other genuinely unreachable positions remain excluded.
     if (n_blacklisted > 0) {
       const ScoredFrontier * fallback = nullptr;
       for (const auto & sf : scored) {
-        if (sf.score >= min_frontier_score_ && is_blacklisted(sf.frontier.goal_pose)) {
+        if (sf.score >= min_frontier_score_ &&
+          !is_visited(sf.frontier.goal_pose) &&
+          is_blacklisted(sf.frontier.goal_pose))
+        {
           if (!fallback || sf.score > fallback->score) {
             fallback = &sf;
           }
@@ -148,10 +195,10 @@ BT::NodeStatus SelectFrontierNode::tick()
       if (fallback) {
         if (node) {
           RCLCPP_WARN(node->get_logger(),
-            "SelectFrontierNode: all frontiers were blacklisted "
-            "(total=%zu, blacklisted=%zu) — removing blacklist entry for "
+            "SelectFrontierNode: all non-visited frontiers were blacklisted "
+            "(total=%zu, visited=%zu, blacklisted=%zu) — removing blacklist entry for "
             "frontier at (%.2f, %.2f) [score=%.1f] and retrying.",
-            scored.size(), n_blacklisted,
+            scored.size(), n_visited, n_blacklisted,
             fallback->frontier.goal_pose.pose.position.x,
             fallback->frontier.goal_pose.pose.position.y,
             fallback->score);
@@ -178,8 +225,9 @@ BT::NodeStatus SelectFrontierNode::tick()
       if (node) {
         RCLCPP_WARN(node->get_logger(),
           "SelectFrontierNode: no viable frontier found "
-          "(total=%zu, below_threshold=%zu, blacklisted=%zu) — setting exploration_done=true.",
-          scored.size(), n_below_threshold, n_blacklisted);
+          "(total=%zu, below_threshold=%zu, visited=%zu, blacklisted=%zu) — "
+          "setting exploration_done=true.",
+          scored.size(), n_below_threshold, n_visited, n_blacklisted);
       }
       setOutput("exploration_done", true);
       has_active_goal_ = false;
@@ -218,9 +266,9 @@ BT::NodeStatus SelectFrontierNode::tick()
   if (node && goal_changed) {
     RCLCPP_INFO(node->get_logger(),
       "SelectFrontierNode: new nav_goal selected → (%.2f, %.2f) [score=%.1f, "
-      "total_frontiers=%zu, blacklisted=%zu].",
+      "total_frontiers=%zu, visited=%zu, blacklisted=%zu].",
       active_goal_.pose.position.x, active_goal_.pose.position.y,
-      active_goal_score_, scored.size(), n_blacklisted);
+      active_goal_score_, scored.size(), n_visited, n_blacklisted);
   }
 
   setOutput("nav_goal", active_goal_);
