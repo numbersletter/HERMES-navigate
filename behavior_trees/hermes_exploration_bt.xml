@@ -100,7 +100,7 @@
       <Sequence name="ReturnBranch">
         <ReturnToStartCondition return_to_start="{return_to_start}"/>
         <ReturnToStart start_pose="{start_pose}" goal="{nav_goal}"/>
-        <NavigateToPose goal="{nav_goal}"/>
+        <NavigateToPose goal="{nav_goal}" server_timeout="2000"/>
       </Sequence>
 
       <!-- ─── Phase sequence: Exploration → Wall Inspection ────────────────
@@ -194,7 +194,7 @@
                   <!-- Success path: navigate then permanently mark as visited -->
                   <Sequence>
                     <RetryUntilSuccessful num_attempts="3">
-                      <NavigateToPose goal="{nav_goal}"/>
+                      <NavigateToPose goal="{nav_goal}" server_timeout="2000"/>
                     </RetryUntilSuccessful>
                     <MarkFrontierVisited
                       goal="{nav_goal}"
@@ -241,7 +241,7 @@
             <!-- Navigate to the viewpoint (3 retries; skip silently on failure) -->
             <ForceSuccess name="NavToWall">
               <RetryUntilSuccessful num_attempts="3">
-                <NavigateToPose goal="{nav_goal}"/>
+                <NavigateToPose goal="{nav_goal}" server_timeout="2000"/>
               </RetryUntilSuccessful>
             </ForceSuccess>
 
