@@ -234,7 +234,16 @@ HermesNavigateNode::on_configure(const rclcpp_lifecycle::State &)
     std::string(get_name()) + "_bt_client",
     rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(true));
   blackboard_->set("node",                    bt_client_node_);
-  blackboard_->set("bt_loop_duration",        std::chrono::milliseconds(10));
+  // bt_loop_duration is used by Nav2's BtActionNode as the per-attempt timeout
+  // for receiving a goal acknowledgement from the action server.  The default
+  // of 10 ms is too short during the Phase 1 → Phase 2 transition when Nav2 is
+  // still processing a goal cancellation and takes up to ~2 s to ack the next
+  // goal.  A short timeout causes NavigateToPose to fail immediately, which
+  // makes RetryUntilSuccessful loop all 3 retries within a single BT tick and
+  // flood Nav2 with rapid-fire preempting goals.  2 000 ms is generous enough
+  // to cover any transient Nav2 latency while still responding quickly in
+  // practice (the ack almost always arrives within tens of milliseconds).
+  blackboard_->set("bt_loop_duration",        std::chrono::milliseconds(2000));
   blackboard_->set("wait_for_service_timeout", std::chrono::milliseconds(1000));
 
   // ── Register BT nodes with this node as context ───────────────────────────
@@ -403,6 +412,16 @@ bool HermesNavigateNode::loadBehaviorTree(const std::string & bt_xml_path)
 
 void HermesNavigateNode::tickTree()
 {
+  // Drive bt_client_node_'s executor so that any pending Nav2 callbacks (goal
+  // acknowledgements, navigation results, cancel responses) are dispatched
+  // before the BT tick runs.  Without this, callbacks queued since the
+  // previous tick — e.g. the ~1 ms goal-ack from the navigate_to_pose action
+  // server — would not be processed and NavigateToPose BT nodes would see a
+  // stale future on the current tick.
+  if (bt_client_node_) {
+    rclcpp::spin_some(bt_client_node_);
+  }
+
   // Update robot pose on the blackboard from the latest subscription message.
   if (!latest_pose_.header.frame_id.empty()) {
     blackboard_->set("robot_pose", latest_pose_);
