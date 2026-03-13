@@ -38,19 +38,3 @@
   gz_type_name: "gz.msgs.Model"
   direction: GZ_TO_ROS
 
-# odom → base_link TF: DiffDrive (Gazebo) → ROS 2 /tf
-# Required by SLAM Toolbox and Nav2 to localise the robot in the odom frame.
-- ros_topic_name: "/tf"
-  gz_topic_name: "/model/hermes/tf"
-  ros_type_name: "tf2_msgs/msg/TFMessage"
-  gz_type_name: "gz.msgs.Pose_V"
-  direction: GZ_TO_ROS
-
-# Diff-drive odometry: Gazebo → ROS 2 /odom
-# Used by Nav2 bt_navigator and velocity_smoother for velocity feedback.
-- ros_topic_name: "/odom"
-  gz_topic_name: "/model/hermes/odometry"
-  ros_type_name: "nav_msgs/msg/Odometry"
-  gz_type_name: "gz.msgs.Odometry"
-  direction: GZ_TO_ROS
-

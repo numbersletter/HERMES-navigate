@@ -82,8 +82,8 @@ def generate_launch_description():
                                    "slam_toolbox_params.yaml")
     nav2_params     = os.path.join(pkg_hermes_navigate, "config",
                                    "sim_nav2_params.yaml")
-    ekf_params      = os.path.join(pkg_hermes_navigate, "config",
-                                   "ekf.yaml")
+    # ekf_params      = os.path.join(pkg_hermes_navigate, "config",
+    #                                "ekf.yaml")
     plugin_params   = os.path.join(pkg_hermes_navigate, "params",
                                    "plugin_params.yaml")
     explore_bt      = os.path.join(pkg_hermes_navigate, "behavior_trees",
@@ -190,8 +190,7 @@ def generate_launch_description():
     )
 
     # ── 5b. robot_localization EKF (odom → base_link) ─────────────────────────
-    #   Fuses diff-drive wheel odometry + rf2o laser odometry into a single
-    #   smooth /odometry/filtered and publishes the odom → base_link TF.
+    #   Disabled for simulation: Nav2 will consume normal /odom directly.
     # ekf_node = Node(
     #     package="robot_localization",
     #     executable="ekf_node",
