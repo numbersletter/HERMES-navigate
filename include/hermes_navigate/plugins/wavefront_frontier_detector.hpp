@@ -41,9 +41,14 @@ namespace hermes_navigate
  *   Keidar & Kaminka, IROS 2012.
  *
  * Runtime-configurable parameters (in params/plugin_params.yaml):
- *   wavefront_frontier_detector.min_frontier_size   (int,    default 3)
- *   wavefront_frontier_detector.clustering_distance  (double, default 0.5 m)
- *   wavefront_frontier_detector.search_distance      (double, default 10.0 m, 0 = unlimited)
+ *   wavefront_frontier_detector.min_frontier_size     (int,    default 3)
+ *   wavefront_frontier_detector.clustering_distance   (double, default 0.5 m)
+ *   wavefront_frontier_detector.search_distance       (double, default 10.0 m, 0 = unlimited)
+ *   wavefront_frontier_detector.seed_search_radius_m  (double, default 0.5 m)
+ *     Radius (metres) searched around the robot cell to find a free BFS seed
+ *     when the robot's own cell is UNKNOWN or LETHAL.  Increase if the robot's
+ *     inflation footprint or a slow-starting SLAM pipeline causes the robot cell
+ *     to be UNKNOWN/LETHAL at exploration start.
  */
 class WavefrontFrontierDetector : public BaseFrontierSearch
 {
@@ -65,7 +70,8 @@ private:
   // Runtime parameters
   int min_frontier_size_{3};
   double clustering_distance_{0.5};
-  double search_distance_{10.0};  ///< Max search radius from robot (m); 0 = unlimited.
+  double search_distance_{10.0};         ///< Max search radius from robot (m); 0 = unlimited.
+  double seed_search_radius_m_{0.5};     ///< Max radius (m) to scan for a free BFS seed cell.
 
   /// @brief BFS from robot position to label reachable free cells,
   ///        then identify frontier cells (free + unknown-adjacent).

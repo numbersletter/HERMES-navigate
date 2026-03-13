@@ -4,3 +4,4 @@ _codeql_detected_source_root
 build/
 install/
 log/
+config/nav2_params_.yaml
