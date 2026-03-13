@@ -30,9 +30,16 @@ hermes_navigate_node:
 
     # ── WavefrontFrontierDetector parameters ──────────────────────────────────
     wavefront_frontier_detector:
-      min_frontier_size:   3      # Minimum cells to form a valid frontier cluster
-      clustering_distance: 0.5    # Max distance (m) between cells in a cluster
-      search_distance:     10.0   # BFS search radius from robot (m); 0 = unlimited
+      min_frontier_size:      3      # Minimum cells to form a valid frontier cluster
+      clustering_distance:    0.5    # Max distance (m) between cells in a cluster
+      search_distance:        10.0   # BFS search radius from robot (m); 0 = unlimited
+      seed_search_radius_m:   0.5    # Radius (m) searched around the robot cell to find a
+                                     # free BFS seed when the robot's own cell is UNKNOWN or
+                                     # LETHAL (e.g. at startup before SLAM has mapped the area,
+                                     # or when the robot's inflation footprint marks immediate
+                                     # neighbours as LETHAL).  Increase if you see
+                                     # "robot cell and all neighbours are UNKNOWN or LETHAL"
+                                     # warnings at the start of exploration.
 
     # ── Cost plugin selection (ordered list; scores are summed) ───────────────
     cost_plugins:
