@@ -11,7 +11,7 @@ bt_navigator:
     use_sim_time: true
     global_frame: map
     robot_base_frame: base_link
-    odom_topic: /odometry/filtered
+    odom_topic: /odom
 # diff_drive + rf2o_laser → EKF → /odometry/filtered + odom→base_link TF → Nav2
     
     error_code_names:
@@ -296,7 +296,7 @@ velocity_smoother:
     min_velocity: [-0.35, 0.0, -1.9]
     max_accel: [3.0, 0.0, 3.5]
     max_decel: [-3.0, 0.0, -3.5]
-    odom_topic: "/odometry/filtered"
+    odom_topic: "/odom"
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]
     velocity_timeout: 1.0

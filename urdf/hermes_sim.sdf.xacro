@@ -206,10 +206,10 @@
       <topic>/demo/cmd_vel</topic>
 
       <!-- odometry output -->
-      <odom_topic>/model/hermes/odometry</odom_topic>
+      <!-- <odom_topic>/model/hermes/odometry</odom_topic>
       <odom_publish_frequency>30</odom_publish_frequency>
       <frame_id>odom</frame_id>
-      <child_frame_id>base_link</child_frame_id>
+      <child_frame_id>base_link</child_frame_id> -->
 
       <!-- Disable TF publishing — robot_localization EKF publishes odom→base_link -->
       <tf_topic></tf_topic>

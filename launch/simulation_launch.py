@@ -192,16 +192,16 @@ def generate_launch_description():
     # ── 5b. robot_localization EKF (odom → base_link) ─────────────────────────
     #   Fuses diff-drive wheel odometry + rf2o laser odometry into a single
     #   smooth /odometry/filtered and publishes the odom → base_link TF.
-    ekf_node = Node(
-        package="robot_localization",
-        executable="ekf_node",
-        name="ekf_filter_node",
-        output="screen",
-        parameters=[
-            ekf_params,
-            {"use_sim_time": True},
-        ],
-    )
+    # ekf_node = Node(
+    #     package="robot_localization",
+    #     executable="ekf_node",
+    #     name="ekf_filter_node",
+    #     output="screen",
+    #     parameters=[
+    #         ekf_params,
+    #         {"use_sim_time": True},
+    #     ],
+    # )
 
     # ── 6. Nav2 (navigation stack) ────────────────────────────────────────────
     #   Nav2 handles NavigateToPose requests from hermes_navigate_node.
@@ -269,7 +269,7 @@ def generate_launch_description():
 
         # Autonomy stack
         slam_toolbox,
-        ekf_node,
+        # ekf_node,
         nav2_bringup,
         hermes_navigate,
         lifecycle_manager,
