@@ -4,16 +4,6 @@
   ====================================================
   Entry point: loaded by HermesNavigateNode on on_configure().
 
-  Lifecycle / service behaviour:
-    CONFIGURED  → Tree is loaded but NOT ticked. Robot is stationary.
-    ACTIVE      → Tick timer starts. Phase 1 (exploration) begins.
-    DEACTIVATED → Tick timer stops; tree is halted (paused). Robot stays put.
-    ~/stop srv  → Sets return_to_start=true. The ReactiveFallback re-evaluates
-                   the ReturnBranch on the very next tick, immediately halting
-                   whichever phase is active. ReturnToStart sets nav_goal to
-                   the recorded start pose and Nav2's NavigateToPose drives
-                   the robot home.
-
   Two-phase tree structure (top-level ReactiveFallback):
   ┌─ ReactiveFallback (MainFallback)
   │   │
